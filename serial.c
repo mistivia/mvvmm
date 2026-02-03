@@ -1,5 +1,7 @@
 #include "serial.h"
 
+#include <bits/pthreadtypes.h>
+#include <pthread.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -10,64 +12,133 @@
 
 #include "mvvm.h"
 
+static inline void clear_iir(struct serial *self) {
+    self->regs[2] = 0b0001;
+}
+
+static inline void iir_set_rx_intr(struct serial *self) {
+    self->regs[2] = 0b0100;
+}
+
+static inline void iir_set_tx_intr(struct serial *self) {
+    self->regs[2] = 0b0010;
+}
+
 void serial_init(struct serial *self) {
     memset(self->regs, 0, sizeof(self->regs));
-    self->dll = 0;
-    self->dlh = 0;
-    self->regs[2] = 0x01;
     self->regs[5] = 0x60;
-    self->regs[6] = 0xB0;
+    self->dl[0] = 0;
+    self->dl[1] = 0;
+    clear_iir(self);
+    self->rx_empty = 1;
+    pthread_mutex_init(&self->rx_lock, NULL);
+    pthread_cond_init(&self->rx_cond, NULL);
 }
+
+// regs:
+// 0 - tx rx
+// 1 - IER - enable intr
+// 2 - IIR - indentify intr
 
 static inline int is_dlab_set(struct serial *self) {
     return self->regs[3] & 0x80;
 }
 
+static inline int is_tx_reg_empty_intr_enabled(struct serial *self) {
+    return self->regs[1] & 0b0010;
+}
+
+static inline int is_rx_reg_available_intr_enabled(struct serial *self) {
+    return self->regs[1] & 0b0001;
+}
+
+static inline int is_line_status_intr_enabled(struct serial *self) {
+    return self->regs[1] & 0b0100;
+}
+
+static inline int is_modem_status_intr_enabled(struct serial *self) {
+    return self->regs[1] & 0b1000;
+}
+
 static inline void trigger_serial_intr(struct mvvm *vm) {
-    struct serial *serial = &vm->serial;
     struct kvm_irq_level irq;
-    if (serial->regs[1] & 0x02) {
-        serial->regs[2] = 0x02;
-        irq.irq = 4;
-        irq.level = 1;
-        ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq);
-        irq.level = 0;
-        ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq);
-    }
+    irq.irq = 4;
+    irq.level = 1;
+    ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq);
+    irq.level = 0;
+    ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq);
 }
 
 static inline void write_reg(struct serial *self, int offset, uint8_t data) {
     self->regs[offset] = data;
 }
 
-static inline uint8_t read_reg(struct serial *self, int offset) {
-    uint8_t ret;
-    switch (offset) {
-    case 2: // IIR
-        ret = self->regs[2];
-        // Clear THRE interrupt after read
-        if ((self->regs[2] & 0x0F) == 0x02) {
-            self->regs[2] = 0x01;
-        }
-        return ret;
-    default:
-        return self->regs[offset];
+void write_to_serial(struct mvvm *vm, char c) {
+    struct serial *serial = &vm->serial;
+    pthread_mutex_lock(&serial->rx_lock);
+    while (!serial->rx_empty) {
+        pthread_cond_wait(&serial->rx_cond, &serial->rx_lock);
     }
+    serial->regs[0] = c;
+    if (is_rx_reg_available_intr_enabled(serial)) {
+        iir_set_rx_intr(serial);
+        trigger_serial_intr(vm);
+    }
+    serial->rx_empty = 0;
+    pthread_mutex_unlock(&serial->rx_lock);
+}
+
+static inline uint8_t read_reg(struct serial *self, int offset) {
+    if (offset == 2) {
+        uint8_t ret = self->regs[2];
+        pthread_mutex_lock(&self->rx_lock);
+        if (self->regs[2] == 0b0100 && is_tx_reg_empty_intr_enabled(self)) {
+            self->regs[2] = 0b0010;
+        } else {
+            self->regs[2] = 0b0001;
+        }
+        pthread_mutex_unlock(&self->rx_lock);
+        return ret;
+    }
+    if (offset == 0) {
+        pthread_mutex_lock(&self->rx_lock);
+        uint8_t ret = self->regs[0];
+        self->rx_empty = 1;
+        pthread_cond_signal(&self->rx_cond);
+        pthread_mutex_unlock(&self->rx_lock);
+        return ret;
+    }
+    return self->regs[offset];
 }
 
 void handle_serial(struct mvvm *vm, struct kvm_run *run) {
     uint8_t *io_data = (uint8_t *)run + run->io.data_offset;
     int offset = run->io.port - 0x3f8;
     struct serial *serial = &vm->serial;
+
+    if (is_dlab_set(serial)) {
+        if (offset == 1 || offset == 0) {
+            if (run->io.direction == KVM_EXIT_IO_OUT) {
+                serial->dl[offset] = *io_data;
+            } else {
+                *io_data = serial->dl[offset];
+            }
+        }
+    }
+    
     if (run->io.direction == KVM_EXIT_IO_OUT) {
         // Handle write operations
         if (offset == 0 && !is_dlab_set(serial)) {
-            // Output to stdout
-            for (int i = 0; i < run->io.count; i++) {
-                putchar(io_data[i]);
-            }
+            putchar(*io_data);
             fflush(stdout);
-            trigger_serial_intr(vm);
+            if (is_tx_reg_empty_intr_enabled(serial)) {
+                pthread_mutex_lock(&serial->rx_lock);
+                if (serial->regs[2] != 0b0100) {
+                    iir_set_tx_intr(serial);
+                    trigger_serial_intr(vm);
+                }
+                pthread_mutex_unlock(&serial->rx_lock);
+            }
         } else {
             write_reg(serial, offset, *io_data);
         }

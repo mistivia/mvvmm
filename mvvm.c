@@ -226,8 +226,8 @@ mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
     struct boot_params *zeropage;
     char *cmd_line;
 
-    if (!map_file(kernel_path, &bz_image_size, &bz_image)) {
-        fprintf(stderr, "failed to load kerne.\n");
+    if (map_file(kernel_path, &bz_image_size, &bz_image) < 0) {
+        fprintf(stderr, "failed to load kernel.\n");
     }
     // Setup boot parameters at 0x10000
     zeropage = (struct boot_params *)(vm->memory + 0x10000);
