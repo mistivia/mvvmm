@@ -2,6 +2,8 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
+
 #include <linux/kvm.h>
 #include <linux/kvm_para.h>
 #include <sys/ioctl.h>
@@ -17,53 +19,59 @@ void serial_init(struct serial *self) {
     self->regs[6] = 0xB0;
 }
 
+static inline int is_dlab_set(struct serial *self) {
+    return self->regs[3] & 0x80;
+}
+
+static inline void trigger_serial_intr(struct mvvm *vm) {
+    struct serial *serial = &vm->serial;
+    struct kvm_irq_level irq;
+    if (serial->regs[1] & 0x02) {
+        serial->regs[2] = 0x02;
+        irq.irq = 4;
+        irq.level = 1;
+        ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq);
+        irq.level = 0;
+        ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq);
+    }
+}
+
+static inline void write_reg(struct serial *self, int offset, uint8_t data) {
+    self->regs[offset] = data;
+}
+
+static inline uint8_t read_reg(struct serial *self, int offset) {
+    uint8_t ret;
+    switch (offset) {
+    case 2: // IIR
+        ret = self->regs[2];
+        // Clear THRE interrupt after read
+        if ((self->regs[2] & 0x0F) == 0x02) {
+            self->regs[2] = 0x01;
+        }
+        return ret;
+    default:
+        return self->regs[offset];
+    }
+}
+
 void handle_serial(struct mvvm *vm, struct kvm_run *run) {
     uint8_t *io_data = (uint8_t *)run + run->io.data_offset;
     int offset = run->io.port - 0x3f8;
     struct serial *serial = &vm->serial;
-    struct kvm_irq_level irq;
-    int i;
-
     if (run->io.direction == KVM_EXIT_IO_OUT) {
         // Handle write operations
-        // Transmit if DLAB bit is not set
-        if (offset == 0 && !(serial->regs[3] & 0x80)) {
+        if (offset == 0 && !is_dlab_set(serial)) {
             // Output to stdout
-            for (i = 0; i < run->io.count; i++) {
+            for (int i = 0; i < run->io.count; i++) {
                 putchar(io_data[i]);
             }
             fflush(stdout);
-            // Trigger interrupt if enabled
-            if (serial->regs[1] & 0x02) {
-                serial->regs[2] = 0x02;
-                irq.irq = 4;
-                irq.level = 1;
-                ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq);
-                irq.level = 0;
-                ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq);
-            }
+            trigger_serial_intr(vm);
+        } else {
+            write_reg(serial, offset, *io_data);
         }
-        // Store value in register
-        serial->regs[offset] = *io_data;
     } else {
-        // Handle read operations
-        switch (offset) {
-        case 2: // IIR
-            *io_data = serial->regs[2];
-            // Clear THRE interrupt after read
-            if ((serial->regs[2] & 0x0F) == 0x02) {
-                serial->regs[2] = 0x01;
-            }
-            break;
-        case 5: // LSR
-            *io_data = 0x60;
-            break;
-        case 6: // MSR
-            *io_data = 0xB0;
-            break;
-        default:
-            *io_data = serial->regs[offset];
-            break;
-        }
+        *io_data = read_reg(serial, offset);
     }
 }
