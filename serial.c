@@ -53,7 +53,7 @@ static inline int is_rx_intr_enabled(struct serial *self) {
 }
 
 static inline void trigger_serial_intr(struct mvvm *vm) {
-    struct kvm_irq_level irq;
+    struct kvm_irq_level irq = {0};
     irq.irq = 4;
     irq.level = 1;
     ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq);

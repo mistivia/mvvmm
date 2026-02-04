@@ -195,9 +195,9 @@ load_initrd(struct mvvm *vm, struct boot_params *zeropage,
         zeropage->hdr.ramdisk_size = 0;
         return 0;
     }
-    int fd;
+    int fd = -1;
     struct stat st = {0};
-    void *initrd;
+    void *initrd = NULL;
     uint32_t initrd_addr = 1024ULL * 1024 * 192; 
 
     fd = open(initrd_path, O_RDONLY);

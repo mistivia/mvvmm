@@ -19,7 +19,7 @@ void reset_terminal_mode() {
 }
 
 void set_terminal_raw_mode() {
-    struct termios raw;
+    struct termios raw = {0};
     if (!isatty(0)) {
         fprintf(stderr, "Not a terminal.\n");
         return;
@@ -39,7 +39,7 @@ void* keyboard_thread_func(void* arg) {
     fprintf(stderr, "Press Ctrl+A & Ctrl+C to exit...\n");
     struct mvvm *vm = arg;
     set_terminal_raw_mode();
-    int ch;
+    int ch = 0;
     int escaped = 0;
     while ((ch = getchar()) != EOF) {
         if (escaped) {
@@ -146,7 +146,7 @@ parse_opts(int argc, char **argv)
         .kernel_cmdline = "console=ttyS0 debug"
     };
 
-    int opt;
+    int opt = 0;
     const char *program_name = (argc > 0) ? argv[0] : "mvvmm";
 
     // Suppress getopt's default error messages for manual handling
