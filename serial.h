@@ -7,9 +7,6 @@
 struct serial {
     uint8_t regs[8];
     uint8_t dl[2];
-
-    int rx_empty;
-    int tx_available;
     pthread_mutex_t rx_lock;
     pthread_cond_t rx_cond;
 };

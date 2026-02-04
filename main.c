@@ -71,7 +71,7 @@ void sigint_handler(int sig) {
 }
 
 #define MEM_SIZE (1024*1024*1024)
-#define KERNEL_ARGS "console=ttyS0 debug"
+#define KERNEL_ARGS "console=ttyS0 debug 8250.nr_uarts=1"
 
 int main(int argc, char *argv[]) {
     struct mvvm vm;

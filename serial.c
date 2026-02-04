@@ -12,15 +12,19 @@
 
 #include "mvvm.h"
 
-static inline void clear_iir(struct serial *self) {
+static inline void clear_intr(struct serial *self) {
     self->regs[2] = 0b0001;
 }
 
-static inline void iir_set_rx_intr(struct serial *self) {
+static inline void set_rx_intr(struct serial *self) {
     self->regs[2] = 0b0100;
 }
 
-static inline void iir_set_tx_intr(struct serial *self) {
+static inline int is_rx_intr_set(struct serial *self) {
+    return self->regs[2] == 0b0100;
+}
+
+static inline void set_tx_intr(struct serial *self) {
     self->regs[2] = 0b0010;
 }
 
@@ -32,35 +36,20 @@ static inline void clear_data_ready(struct serial *self) {
     self->regs[5] &= (~0x01);
 }
 
-void serial_init(struct serial *self) {
-    memset(self->regs, 0, sizeof(self->regs));
-    self->regs[5] = 0x60;
-    self->dl[0] = 0;
-    self->dl[1] = 0;
-    clear_iir(self);
-    self->rx_empty = 1;
-    pthread_mutex_init(&self->rx_lock, NULL);
-    pthread_cond_init(&self->rx_cond, NULL);
+static inline int is_rx_empty(struct serial *self) {
+    return !(self->regs[5] & 0x01);
 }
 
 static inline int is_dlab_set(struct serial *self) {
     return self->regs[3] & 0x80;
 }
 
-static inline int is_tx_reg_empty_intr_enabled(struct serial *self) {
+static inline int is_tx_intr_enabled(struct serial *self) {
     return self->regs[1] & 0b0010;
 }
 
-static inline int is_rx_reg_available_intr_enabled(struct serial *self) {
+static inline int is_rx_intr_enabled(struct serial *self) {
     return self->regs[1] & 0b0001;
-}
-
-static inline int is_line_status_intr_enabled(struct serial *self) {
-    return self->regs[1] & 0b0100;
-}
-
-static inline int is_modem_status_intr_enabled(struct serial *self) {
-    return self->regs[1] & 0b1000;
 }
 
 static inline void trigger_serial_intr(struct mvvm *vm) {
@@ -72,6 +61,16 @@ static inline void trigger_serial_intr(struct mvvm *vm) {
     ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq);
 }
 
+void serial_init(struct serial *self) {
+    memset(self->regs, 0, sizeof(self->regs));
+    self->regs[5] = 0x60;
+    self->dl[0] = 0;
+    self->dl[1] = 0;
+    clear_intr(self);
+    pthread_mutex_init(&self->rx_lock, NULL);
+    pthread_cond_init(&self->rx_cond, NULL);
+}
+
 static inline void write_reg(struct serial *self, int offset, uint8_t data) {
     self->regs[offset] = data;
 }
@@ -79,33 +78,31 @@ static inline void write_reg(struct serial *self, int offset, uint8_t data) {
 void write_to_serial(struct mvvm *vm, char c) {
     struct serial *serial = &vm->serial;
     pthread_mutex_lock(&serial->rx_lock);
-    while (!serial->rx_empty) {
+    while (!is_rx_empty(serial)) {
         pthread_cond_wait(&serial->rx_cond, &serial->rx_lock);
     }
     serial->regs[0] = c;
-    if (is_rx_reg_available_intr_enabled(serial)) {
-        iir_set_rx_intr(serial);
+    if (is_rx_intr_enabled(serial)) {
+        set_rx_intr(serial);
         trigger_serial_intr(vm);
     }
-    serial->rx_empty = 0;
     set_data_ready(serial);
     pthread_mutex_unlock(&serial->rx_lock);
 }
 
-static inline uint8_t read_reg(struct serial *self, int offset) {
+static uint8_t read_reg(struct serial *self, int offset) {
     if (offset == 7) return 0;
     if (offset == 2) {
         uint8_t ret = self->regs[2];
-        if (self->regs[2] == 0b0100 && is_tx_reg_empty_intr_enabled(self)) {
-            self->regs[2] = 0b0010;
+        if (is_rx_intr_set(self) && is_tx_intr_enabled(self)) {
+            set_tx_intr(self);
         } else {
-            self->regs[2] = 0b0001;
+            clear_intr(self);
         }
         return ret;
     }
     if (offset == 0) {
         uint8_t ret = self->regs[0];
-        self->rx_empty = 1;
         clear_data_ready(self);
         pthread_cond_signal(&self->rx_cond);
         return ret;
@@ -133,9 +130,9 @@ void handle_serial(struct mvvm *vm, struct kvm_run *run) {
         if (offset == 0 && !is_dlab_set(serial)) {
             putchar(*io_data);
             fflush(stdout);
-            if (is_tx_reg_empty_intr_enabled(serial)) {
-                if (serial->regs[2] != 0b0100) {
-                    iir_set_tx_intr(serial);
+            if (is_tx_intr_enabled(serial)) {
+                if (!is_rx_intr_set(serial)) {
+                    set_tx_intr(serial);
                     trigger_serial_intr(vm);
                 }
             }
