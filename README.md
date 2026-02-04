@@ -2,6 +2,8 @@
 
 A small VMM built on KVM.
 
+![Snipaste_2026-02-04_15-36-33](https://github.com/user-attachments/assets/3b52cb10-e57a-437c-b675-f90a0535ed34)
+
 ## Build
 
     make
