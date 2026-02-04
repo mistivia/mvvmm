@@ -21,9 +21,9 @@ static void set_flat_mode(struct kvm_segment *seg) {
 }
 
 static int init_cpu(int kvm_fd, int cpu_fd) {
-    struct kvm_sregs sregs;
-    struct kvm_regs regs;
-    struct kvm_cpuid2 *cpuid;
+    struct kvm_sregs sregs = {0};
+    struct kvm_regs regs = {0};
+    struct kvm_cpuid2 *cpuid = NULL;
     int max_entries = 100;
 
     if (ioctl(cpu_fd, KVM_GET_SREGS, &(sregs)) < 0) {
@@ -73,7 +73,7 @@ static int init_cpu(int kvm_fd, int cpu_fd) {
 
 int mvvm_init(struct mvvm *self, uint64_t mem_size) {
     struct kvm_pit_config pit = {0};
-    struct kvm_userspace_memory_region mem;
+    struct kvm_userspace_memory_region mem = {0};
     
     // Open KVM device
     self->kvm_fd = open("/dev/kvm", O_RDWR | O_CLOEXEC);
@@ -109,6 +109,7 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size) {
     }
     // Register memory region with KVM
     mem.slot = 0;
+    mem.flags = 0;
     mem.guest_phys_addr = 0;
     mem.memory_size = self->memory_size;
     mem.userspace_addr = (uint64_t)self->memory;
@@ -141,9 +142,9 @@ void mvvm_destroy(struct mvvm *self) {
 static int
 map_file(const char *path, size_t *size, void**out)
 {
-    int fd;
-    struct stat st;
-    void *addr;
+    int fd = -1;
+    struct stat st = {0};
+    void *addr = NULL;
 
     fd = open(path, O_RDONLY);
     if (fd < 0) {
@@ -189,8 +190,13 @@ static int
 load_initrd(struct mvvm *vm, struct boot_params *zeropage,
             const char *initrd_path) 
 {
+    if (initrd_path == NULL) {
+        zeropage->hdr.ramdisk_image = 0;
+        zeropage->hdr.ramdisk_size = 0;
+        return 0;
+    }
     int fd;
-    struct stat st;
+    struct stat st = {0};
     void *initrd;
     uint32_t initrd_addr = 1024ULL * 1024 * 192; 
 
@@ -225,14 +231,15 @@ int
 mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
             const char *initrd_path, const char *kernel_args)
 {
-    void *bz_image;
-    size_t bz_image_size;
-    uint32_t setup_size;
-    struct boot_params *zeropage;
-    char *cmd_line;
+    void *bz_image = NULL;
+    size_t bz_image_size = 0;
+    uint32_t setup_size = 0;
+    struct boot_params *zeropage = NULL;
+    char *cmd_line = NULL;
 
     if (map_file(kernel_path, &bz_image_size, &bz_image) < 0) {
         fprintf(stderr, "failed to load kernel.\n");
+        return -1;
     }
     // Setup boot parameters at 0x10000
     zeropage = (struct boot_params *)(vm->memory + 0x10000);
@@ -265,8 +272,8 @@ mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
 
 int mvvm_run(struct mvvm *vm) {
     int ret = 0;
-    int mmap_size;
-    struct kvm_run *run;
+    int mmap_size = 0;
+    struct kvm_run *run = NULL;
     mmap_size = ioctl(vm->kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
     if (mmap_size < 0) {
         perror("KVM_GET_VCPU_MMAP_SIZE");

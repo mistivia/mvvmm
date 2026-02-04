@@ -17,7 +17,7 @@ $(TARGET): $(C_OBJS)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 test: mvvmm
-	./mvvmm vmlinuz initrd
+	./mvvmm -k ./vmlinuz -i ./initrd -m 1g
 
 clean:
 	rm -f $(C_OBJS) $(TARGET)
