@@ -93,6 +93,7 @@ void write_to_serial(struct mvvm *vm, char c) {
 }
 
 static inline uint8_t read_reg(struct serial *self, int offset) {
+    if (offset == 7) return 0;
     if (offset == 2) {
         uint8_t ret = self->regs[2];
         if (self->regs[2] == 0b0100 && is_tx_reg_empty_intr_enabled(self)) {

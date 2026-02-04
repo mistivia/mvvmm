@@ -16,7 +16,7 @@ $(TARGET): $(C_OBJS)
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-test:
+test: mvvmm
 	./mvvmm vmlinuz initrd
 
 clean:
