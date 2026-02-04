@@ -1,5 +1,6 @@
 #include "mvvm.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -191,7 +192,7 @@ load_initrd(struct mvvm *vm, struct boot_params *zeropage,
     int fd;
     struct stat st;
     void *initrd;
-    uint32_t initrd_addr = 0x20000000;
+    uint32_t initrd_addr = 1024ULL * 1024 * 192; 
 
     fd = open(initrd_path, O_RDONLY);
     if (fd < 0) {
@@ -205,6 +206,10 @@ load_initrd(struct mvvm *vm, struct boot_params *zeropage,
     initrd = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     if (initrd == MAP_FAILED) {
         perror("mmap initrd");
+        return -1;
+    }
+    if ((uint64_t)initrd_addr + st.st_size >= vm->memory_size) {
+        fprintf(stderr, "failed to load initrd.\n");
         return -1;
     }
     memcpy(vm->memory + initrd_addr, initrd, st.st_size);
