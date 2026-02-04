@@ -14,6 +14,5 @@ Get a vmlinuz and initrd, then:
 
 ## TODO
 
-- Full 8250 UART emulation
 - virtio-blk emulation
 - virtio-net emulation
