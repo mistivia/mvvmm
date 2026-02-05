@@ -304,25 +304,39 @@ static int memcpy_to_from_queue(VIRTIODevice *s, uint8_t *buf,
     if (count == 0)
         return 0;
 
-    get_desc(s, &desc, queue_idx, desc_idx);
+    if (get_desc(s, &desc, queue_idx, desc_idx) < 0) {
+        fprintf(stderr, "memcpy_to_from_queue get_desc failed.\n");
+        return -1;
+    }
 
     if (to_queue) {
         f_write_flag = VRING_DESC_F_WRITE;
         /* find the first write descriptor */
-        for(;;) {
+        for(int i = 0;;i++) {
+            if (i > 1024) {
+                fprintf(stderr, "memcpy_to_from_queue infinite loop1.\n");
+                return -1;
+            }
             if ((desc.flags & VRING_DESC_F_WRITE) == f_write_flag)
                 break;
             if (!(desc.flags & VRING_DESC_F_NEXT))
                 return -1;
             desc_idx = desc.next;
-            get_desc(s, &desc, queue_idx, desc_idx);
+            if (get_desc(s, &desc, queue_idx, desc_idx) < 0) {
+                fprintf(stderr, "memcpy_to_from_queue: failed to get_desc2.\n");
+                return -1;
+            }
         }
     } else {
         f_write_flag = 0;
     }
 
     /* find the descriptor at offset */
-    for(;;) {
+    for(int i = 0;;i++) {
+        if (i > 1024) {
+            fprintf(stderr, "memcpy_to_from_queue infinite loop2.\n");
+            return -1;
+        }
         if ((desc.flags & VRING_DESC_F_WRITE) != f_write_flag)
             return -1;
         if (offset < desc.len)
@@ -331,10 +345,17 @@ static int memcpy_to_from_queue(VIRTIODevice *s, uint8_t *buf,
             return -1;
         desc_idx = desc.next;
         offset -= desc.len;
-        get_desc(s, &desc, queue_idx, desc_idx);
+        if (get_desc(s, &desc, queue_idx, desc_idx) < 0) {
+            fprintf(stderr, "memcpy_to_from_queue: failed to get_desc3.\n");
+            return -1;
+        }
     }
 
-    for(;;) {
+    for(int i = 0;;i++) {
+        if (i > 1024) {
+            fprintf(stderr, "memcpy_to_from_queue infinite loop1.\n");
+            return -1;
+        }
         l = min_int(count, desc.len - offset);
         if (to_queue)
             virtio_memcpy_to_ram(s, desc.addr + offset, buf, l);
@@ -349,7 +370,10 @@ static int memcpy_to_from_queue(VIRTIODevice *s, uint8_t *buf,
             if (!(desc.flags & VRING_DESC_F_NEXT))
                 return -1;
             desc_idx = desc.next;
-            get_desc(s, &desc, queue_idx, desc_idx);
+            if (get_desc(s, &desc, queue_idx, desc_idx) < 0) {
+                fprintf(stderr, "memcpy_to_from_queue: failed to get_desc4.\n");
+                return -1;
+            }
             if ((desc.flags & VRING_DESC_F_WRITE) != f_write_flag)
                 return -1;
             offset = 0;
@@ -614,8 +638,8 @@ uint32_t virtio_mmio_read(VIRTIODevice *s, uint32_t offset, int size)
     }
 #ifdef DEBUG_VIRTIO
     if (s->debug & VIRTIO_DEBUG_IO) {
-        printf("virto_mmio_read: offset=0x%x val=0x%x size=%d\n", 
-               offset, val, 1 << size_log2);
+        printf("virtio_mmio_read: offset=0x%x val=0x%x size=%d\n", 
+               offset, val, size);
     }
 #endif
     
@@ -842,8 +866,15 @@ static int virtio_block_recv_request(VIRTIODevice *s, int queue_idx,
         }
         break;
     case VIRTIO_BLK_T_OUT:
-        assert(write_size >= 1);
+        if (write_size < 1) {
+            fprintf(stderr, "virtio_block_recv_request invalid write_size.\n");
+            abort();
+        }
         len = read_size - sizeof(h);
+        if (len <= 0) {
+            fprintf(stderr, "virtio_block_recv_request invalid read_size.\n");
+            abort();
+        }
         buf = malloc(len);
         memset(buf, 0, len);
         memcpy_from_queue(s, buf, queue_idx, desc_idx, sizeof(h), len);
@@ -927,19 +958,28 @@ static int virtio_net_recv_request(VIRTIODevice *s, int queue_idx,
 
 static bool virtio_net_can_write_packet(EthernetDevice *es)
 {
+    bool ret = 0;
     VIRTIODevice *s = es->device_opaque;
+    pthread_mutex_lock(&s->lock);
     QueueState *qs = &s->queue[0];
     uint16_t avail_idx = {0};
 
-    if (!qs->ready)
-        return false;
+    if (!qs->ready) {
+        ret = false;
+        goto end;
+    }
     avail_idx = virtio_read16(s, qs->avail_addr + 2);
-    return qs->last_avail_idx != avail_idx;
+    ret = qs->last_avail_idx != avail_idx;
+end:
+    pthread_mutex_unlock(&s->lock);
+    return ret;
 }
 
 static void virtio_net_write_packet(EthernetDevice *es, const uint8_t *buf, int buf_len)
 {
     VIRTIODevice *s = es->device_opaque;
+    pthread_mutex_lock(&s->lock);
+
     VIRTIONetDevice *s1 = (VIRTIONetDevice *)s;
     int queue_idx = 0;
     QueueState *qs = &s->queue[queue_idx];
@@ -949,22 +989,24 @@ static void virtio_net_write_packet(EthernetDevice *es, const uint8_t *buf, int 
     uint16_t avail_idx = {0};
 
     if (!qs->ready)
-        return;
+        goto end;
     avail_idx = virtio_read16(s, qs->avail_addr + 2);
     if (qs->last_avail_idx == avail_idx)
-        return;
+        goto end;
     desc_idx = virtio_read16(s, qs->avail_addr + 4 + 
                              (qs->last_avail_idx & (qs->num - 1)) * 2);
     if (get_desc_rw_size(s, &read_size, &write_size, queue_idx, desc_idx))
-        return;
+        goto end;
     len = s1->header_size + buf_len; 
     if (len > write_size)
-        return;
+        goto end;
     memset(&h, 0, s1->header_size);
     memcpy_to_queue(s, queue_idx, desc_idx, 0, &h, s1->header_size);
     memcpy_to_queue(s, queue_idx, desc_idx, s1->header_size, buf, buf_len);
     virtio_consume_desc(s, queue_idx, desc_idx, len);
     qs->last_avail_idx++;
+end:
+    pthread_mutex_unlock(&s->lock);
 }
 
 VIRTIODevice *virtio_net_init(VIRTIOBusDef *bus, EthernetDevice *es)
