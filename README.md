@@ -18,3 +18,10 @@ Get a vmlinuz and initrd, then:
 
 - virtio-blk emulation
 - virtio-net emulation
+
+
+## License
+
+All files are licensed under GPLv3 if not specified otherwise.
+
+`virtio.c` and `virtio.h` (ported from TinyEMU) are licensed under MIT license.
