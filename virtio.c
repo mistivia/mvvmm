@@ -118,10 +118,6 @@ struct VIRTIODevice {
     uint8_t config_space[MAX_CONFIG_SPACE_SIZE];
 };
 
-static uint32_t virtio_mmio_read(void *opaque, uint32_t offset1, int size_log2);
-static void virtio_mmio_write(void *opaque, uint32_t offset,
-                              uint32_t val, int size_log2);
-
 
 static void put_le32(void* ptr, uint32_t val)
 {
@@ -524,9 +520,8 @@ static void virtio_config_write(VIRTIODevice *s, uint32_t offset,
     }
 }
 
-static uint32_t virtio_mmio_read(void *opaque, uint32_t offset, int size_log2)
+uint32_t virtio_mmio_read(VIRTIODevice *s, uint32_t offset, int size_log2)
 {
-    VIRTIODevice *s = opaque;
     uint32_t val = {0};
 
     if (offset >= VIRTIO_MMIO_CONFIG) {
@@ -628,11 +623,9 @@ static void set_high32(virtio_phys_addr_t *paddr, uint32_t val)
     *paddr = (*paddr & 0xffffffff) | ((virtio_phys_addr_t)val << 32);
 }
 
-static void virtio_mmio_write(void *opaque, uint32_t offset,
-                              uint32_t val, int size_log2)
+void virtio_mmio_write(VIRTIODevice *s, uint32_t offset,
+                       uint32_t val, int size_log2)
 {
-    VIRTIODevice *s = opaque;
-    
 #ifdef DEBUG_VIRTIO
     if (s->debug & VIRTIO_DEBUG_IO) {
         printf("virto_mmio_write: offset=0x%x val=0x%x size=%d\n",
@@ -707,7 +700,7 @@ void virtio_set_debug(VIRTIODevice *s, int debug)
     s->debug = debug;
 }
 
-static void virtio_config_change_notify(VIRTIODevice *s)
+void virtio_config_change_notify(VIRTIODevice *s)
 {
     /* INT_CONFIG interrupt */
     s->int_status |= 2;
@@ -908,7 +901,7 @@ static int virtio_net_recv_request(VIRTIODevice *s, int queue_idx,
         buf = malloc(len);
         memset(buf, 0, len);
         memcpy_from_queue(s, buf, queue_idx, desc_idx, s1->header_size, len);
-        es->write_packet(es, buf, len);
+        es->write_packet_to_ether(es, buf, len);
         free(buf);
         virtio_consume_desc(s, queue_idx, desc_idx, 0);
     }
@@ -957,25 +950,9 @@ static void virtio_net_write_packet(EthernetDevice *es, const uint8_t *buf, int 
     qs->last_avail_idx++;
 }
 
-static void virtio_net_set_carrier(EthernetDevice *es, bool carrier_state)
-{
-#if 0
-    VIRTIODevice *s1 = es->device_opaque;
-    VIRTIONetDevice *s = (VIRTIONetDevice *)s1;
-    int cur_carrier_state;
-
-    //    printf("virtio_net_set_carrier: %d\n", carrier_state);
-    cur_carrier_state = s->common.config_space[6] & 1;
-    if (cur_carrier_state != carrier_state) {
-        s->common.config_space[6] = (carrier_state << 0);
-        virtio_config_change_notify(s1);
-    }
-#endif
-}
-
 VIRTIODevice *virtio_net_init(VIRTIOBusDef *bus, EthernetDevice *es)
 {
-    VIRTIONetDevice *s = {0};
+    VIRTIONetDevice *s = NULL;
 
     s = malloc(sizeof(*s));
     *s = (VIRTIONetDevice){0};
@@ -993,8 +970,7 @@ VIRTIODevice *virtio_net_init(VIRTIOBusDef *bus, EthernetDevice *es)
     s->header_size = sizeof(VIRTIONetHeader);
     
     es->device_opaque = s;
-    es->device_can_write_packet = virtio_net_can_write_packet;
-    es->device_write_packet = virtio_net_write_packet;
-    es->device_set_carrier = virtio_net_set_carrier;
+    es->can_write_packet_to_virtio = virtio_net_can_write_packet;
+    es->write_packet_to_virtio = virtio_net_write_packet;
     return (VIRTIODevice *)s;
 }

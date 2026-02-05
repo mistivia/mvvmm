@@ -44,6 +44,11 @@ typedef struct {
 
 typedef struct VIRTIODevice VIRTIODevice; 
 
+void virtio_config_change_notify(VIRTIODevice *s);
+uint32_t virtio_mmio_read(VIRTIODevice *s, uint32_t offset1, int size_log2);
+void virtio_mmio_write(VIRTIODevice *s, uint32_t offset,
+                       uint32_t val, int size_log2);
+
 void virtio_set_debug(VIRTIODevice *s, int debug_flags);
 
 /* block device */
@@ -71,15 +76,15 @@ typedef struct EthernetDevice EthernetDevice;
 
 struct EthernetDevice {
     uint8_t mac_addr[6]; /* mac address of the interface */
-    void (*write_packet)(EthernetDevice *net,
-                         const uint8_t *buf, int len);
+    void (*write_packet_to_ether)(EthernetDevice *net,
+                                  const uint8_t *buf, int len);
     void *opaque;
     /* the following is set by the device */
     void *device_opaque;
-    bool (*device_can_write_packet)(EthernetDevice *net);
-    void (*device_write_packet)(EthernetDevice *net,
+    bool (*can_write_packet_to_virtio)(EthernetDevice *net);
+    void (*write_packet_to_virtio)(EthernetDevice *net,
                                 const uint8_t *buf, int len);
-    void (*device_set_carrier)(EthernetDevice *net, bool carrier_state);
+
 };
 
 VIRTIODevice *virtio_net_init(VIRTIOBusDef *bus, EthernetDevice *es);
