@@ -819,6 +819,7 @@ static int virtio_block_recv_request(VIRTIODevice *s, int queue_idx,
     switch(h.type) {
     case VIRTIO_BLK_T_IN:
         s1->req.buf = malloc(write_size);
+        memset(s1->req.buf, 0, write_size);
         s1->req.write_size = write_size;
         ret = bs->read_async(bs, h.sector_num, s1->req.buf, 
                              (write_size - 1) / SECTOR_SIZE,
@@ -834,6 +835,7 @@ static int virtio_block_recv_request(VIRTIODevice *s, int queue_idx,
         assert(write_size >= 1);
         len = read_size - sizeof(h);
         buf = malloc(len);
+        memset(buf, 0, len);
         memcpy_from_queue(s, buf, queue_idx, desc_idx, sizeof(h), len);
         ret = bs->write_async(bs, h.sector_num, buf, len / SECTOR_SIZE,
                               virtio_block_req_cb, s);
@@ -904,6 +906,7 @@ static int virtio_net_recv_request(VIRTIODevice *s, int queue_idx,
             return 0;
         len = read_size - s1->header_size;
         buf = malloc(len);
+        memset(buf, 0, len);
         memcpy_from_queue(s, buf, queue_idx, desc_idx, s1->header_size, len);
         es->write_packet(es, buf, len);
         free(buf);
