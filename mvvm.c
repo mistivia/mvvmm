@@ -13,6 +13,10 @@
 #include <linux/kvm_para.h>
 #include <asm/bootparam.h>
 
+#include "blkdev.h"
+#include "config.h"
+#include "virtio.h"
+
 static void set_flat_mode(struct kvm_segment *seg) {
     seg->base = 0;
     seg->limit = 0xffffffff;
@@ -129,6 +133,7 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size) {
     }
     // Initialize serial port
     serial_init(&self->serial);
+    mvvm_init_virtio_blk(self, "./disk.img");
     return 0;
 }
 
@@ -294,6 +299,9 @@ int mvvm_run(struct mvvm *vm) {
     int ret = 0;
     int mmap_size = 0;
     struct kvm_run *run = NULL;
+    VIRTIODevice *virtiodev = NULL;
+    uint64_t mmio_base_addr = 0;
+
     mmap_size = ioctl(vm->kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
     if (mmap_size < 0) {
         perror("KVM_GET_VCPU_MMAP_SIZE");
@@ -321,7 +329,23 @@ int mvvm_run(struct mvvm *vm) {
             printf("KVM_EXIT_SHUTDOWN\n");
             goto exit_loop;
         case KVM_EXIT_MMIO:
-            continue;
+            if (run->mmio.phys_addr << 30 == 1024) {
+                virtiodev = vm->blk;
+                mmio_base_addr = VIRTIO_BLK_MMIO_ADDR;
+            } else { // TODO: net device
+                break;
+            }
+            if (run->mmio.is_write) {
+                virtio_mmio_write(virtiodev, 
+                    run->mmio.phys_addr - mmio_base_addr,
+                    *(uint32_t*)(run->mmio.data), run->mmio.len);
+            } else {
+                uint32_t val = virtio_mmio_read(virtiodev, 
+                    run->mmio.phys_addr - mmio_base_addr, 
+                    run->mmio.len);
+                *(uint32_t*)(run->mmio.data) = val;
+            }
+            break;
         default:
             printf("Unhandled exit reason: %d\n", run->exit_reason);
             ret = -1;
