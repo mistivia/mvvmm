@@ -21,6 +21,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
+#include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -116,6 +118,7 @@ struct VIRTIODevice {
                                               is written */
     uint32_t config_space_size; /* in bytes, must be multiple of 4 */
     uint8_t config_space[MAX_CONFIG_SPACE_SIZE];
+    pthread_mutex_t lock;
 };
 
 
@@ -201,6 +204,7 @@ static void virtio_init(VIRTIODevice *s, VIRTIOBusDef *bus,
     s->vendor_id = 0xffff;
     s->config_space_size = config_space_size;
     s->device_recv = device_recv;
+    pthread_mutex_init(&s->lock, NULL);
     virtio_reset(s);
 }
 
@@ -522,10 +526,13 @@ static void virtio_config_write(VIRTIODevice *s, uint32_t offset,
 
 uint32_t virtio_mmio_read(VIRTIODevice *s, uint32_t offset, int size_log2)
 {
+    
     uint32_t val = {0};
 
+    pthread_mutex_lock(&s->lock);
     if (offset >= VIRTIO_MMIO_CONFIG) {
-        return virtio_config_read(s, offset - VIRTIO_MMIO_CONFIG, size_log2);
+        val = virtio_config_read(s, offset - VIRTIO_MMIO_CONFIG, size_log2);
+        goto end;
     }
 
     if (size_log2 == 2) {
@@ -610,6 +617,9 @@ uint32_t virtio_mmio_read(VIRTIODevice *s, uint32_t offset, int size_log2)
                offset, val, 1 << size_log2);
     }
 #endif
+    
+end:
+    pthread_mutex_unlock(&s->lock);
     return val;
 }
 
@@ -626,16 +636,16 @@ static void set_high32(virtio_phys_addr_t *paddr, uint32_t val)
 void virtio_mmio_write(VIRTIODevice *s, uint32_t offset,
                        uint32_t val, int size_log2)
 {
+    pthread_mutex_lock(&s->lock);
 #ifdef DEBUG_VIRTIO
     if (s->debug & VIRTIO_DEBUG_IO) {
         printf("virto_mmio_write: offset=0x%x val=0x%x size=%d\n",
                offset, val, 1 << size_log2);
     }
 #endif
-
     if (offset >= VIRTIO_MMIO_CONFIG) {
         virtio_config_write(s, offset - VIRTIO_MMIO_CONFIG, val, size_log2);
-        return;
+        goto end;
     }
 
     if (size_log2 == 2) {
@@ -693,6 +703,8 @@ void virtio_mmio_write(VIRTIODevice *s, uint32_t offset,
             break;
         }
     }
+end:
+    pthread_mutex_unlock(&s->lock);
 }
 
 void virtio_set_debug(VIRTIODevice *s, int debug)
@@ -781,6 +793,7 @@ static void virtio_block_req_cb(void *opaque, int ret)
 {
     VIRTIODevice *s = opaque;
     VIRTIOBlockDevice *s1 = (VIRTIOBlockDevice *)s;
+    pthread_mutex_lock(&s->lock);
 
     virtio_block_req_end(s, ret);
     
@@ -788,6 +801,7 @@ static void virtio_block_req_cb(void *opaque, int ret)
 
     /* handle next requests */
     queue_notify((VIRTIODevice *)s, s1->req.queue_idx);
+    pthread_mutex_unlock(&s->lock);
 }
 
 /* XXX: handle async I/O */

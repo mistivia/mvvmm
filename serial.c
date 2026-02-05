@@ -1,6 +1,5 @@
 #include "serial.h"
 
-#include <bits/pthreadtypes.h>
 #include <pthread.h>
 #include <string.h>
 #include <stdio.h>
