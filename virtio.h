@@ -45,9 +45,9 @@ typedef struct {
 typedef struct VIRTIODevice VIRTIODevice; 
 
 void virtio_config_change_notify(VIRTIODevice *s);
-uint32_t virtio_mmio_read(VIRTIODevice *s, uint32_t offset1, int size_log2);
+uint32_t virtio_mmio_read(VIRTIODevice *s, uint32_t offset1, int size);
 void virtio_mmio_write(VIRTIODevice *s, uint32_t offset,
-                       uint32_t val, int size_log2);
+                       uint32_t val, int size);
 
 void virtio_set_debug(VIRTIODevice *s, int debug_flags);
 

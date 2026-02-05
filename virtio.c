@@ -465,25 +465,25 @@ static void queue_notify(VIRTIODevice *s, int queue_idx)
 }
 
 static uint32_t virtio_config_read(VIRTIODevice *s, uint32_t offset,
-                                   int size_log2)
+                                   int size)
 {
     uint32_t val = {0};
-    switch(size_log2) {
-    case 0:
+    switch(size) {
+    case 1:
         if (offset < s->config_space_size) {
             val = s->config_space[offset];
         } else {
             val = 0;
         }
         break;
-    case 1:
+    case 2:
         if (offset < (s->config_space_size - 1)) {
             val = get_le16(&s->config_space[offset]);
         } else {
             val = 0;
         }
         break;
-    case 2:
+    case 4:
         if (offset < (s->config_space_size - 3)) {
             val = get_le32(s->config_space + offset);
         } else {
@@ -497,24 +497,24 @@ static uint32_t virtio_config_read(VIRTIODevice *s, uint32_t offset,
 }
 
 static void virtio_config_write(VIRTIODevice *s, uint32_t offset,
-                                uint32_t val, int size_log2)
+                                uint32_t val, int size)
 {
-    switch(size_log2) {
-    case 0:
+    switch(size) {
+    case 1:
         if (offset < s->config_space_size) {
             s->config_space[offset] = val;
             if (s->config_write)
                 s->config_write(s);
         }
         break;
-    case 1:
+    case 2:
         if (offset < s->config_space_size - 1) {
             put_le16(s->config_space + offset, val);
             if (s->config_write)
                 s->config_write(s);
         }
         break;
-    case 2:
+    case 4:
         if (offset < s->config_space_size - 3) {
             put_le32(s->config_space + offset, val);
             if (s->config_write)
@@ -524,18 +524,18 @@ static void virtio_config_write(VIRTIODevice *s, uint32_t offset,
     }
 }
 
-uint32_t virtio_mmio_read(VIRTIODevice *s, uint32_t offset, int size_log2)
+uint32_t virtio_mmio_read(VIRTIODevice *s, uint32_t offset, int size)
 {
     
     uint32_t val = {0};
 
     pthread_mutex_lock(&s->lock);
     if (offset >= VIRTIO_MMIO_CONFIG) {
-        val = virtio_config_read(s, offset - VIRTIO_MMIO_CONFIG, size_log2);
+        val = virtio_config_read(s, offset - VIRTIO_MMIO_CONFIG, size);
         goto end;
     }
 
-    if (size_log2 == 2) {
+    if (size == 4) {
         switch(offset) {
         case VIRTIO_MMIO_MAGIC_VALUE:
             val = 0x74726976;
@@ -609,6 +609,7 @@ uint32_t virtio_mmio_read(VIRTIODevice *s, uint32_t offset, int size_log2)
             break;
         }
     } else {
+        fprintf(stderr, "virtio mmio read error: len != 4\n");
         val = 0;
     }
 #ifdef DEBUG_VIRTIO
@@ -634,21 +635,21 @@ static void set_high32(virtio_phys_addr_t *paddr, uint32_t val)
 }
 
 void virtio_mmio_write(VIRTIODevice *s, uint32_t offset,
-                       uint32_t val, int size_log2)
+                       uint32_t val, int size)
 {
     pthread_mutex_lock(&s->lock);
 #ifdef DEBUG_VIRTIO
     if (s->debug & VIRTIO_DEBUG_IO) {
         printf("virto_mmio_write: offset=0x%x val=0x%x size=%d\n",
-               offset, val, 1 << size_log2);
+               offset, val, size);
     }
 #endif
     if (offset >= VIRTIO_MMIO_CONFIG) {
-        virtio_config_write(s, offset - VIRTIO_MMIO_CONFIG, val, size_log2);
+        virtio_config_write(s, offset - VIRTIO_MMIO_CONFIG, val, size);
         goto end;
     }
 
-    if (size_log2 == 2) {
+    if (size == 4) {
         switch(offset) {
         case VIRTIO_MMIO_DEVICE_FEATURES_SEL:
             s->device_features_sel = val;
@@ -702,6 +703,8 @@ void virtio_mmio_write(VIRTIODevice *s, uint32_t offset,
             }
             break;
         }
+    } else {
+        fprintf(stderr, "virtio mmio write error: len != 4\n");
     }
 end:
     pthread_mutex_unlock(&s->lock);
