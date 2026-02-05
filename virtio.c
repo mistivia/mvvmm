@@ -29,6 +29,7 @@
 #include <inttypes.h>
 #include <assert.h>
 #include <stdarg.h>
+#include <stdatomic.h>
 
 #include "virtio.h"
 
@@ -210,6 +211,7 @@ static void virtio_init(VIRTIODevice *s, VIRTIOBusDef *bus,
 
 static uint16_t virtio_read16(VIRTIODevice *s, virtio_phys_addr_t addr)
 {
+    atomic_thread_fence(memory_order_acquire);
     uint8_t *ptr = NULL;
     if (addr & 1)
         return 0; /* unaligned access are not supported */
@@ -229,6 +231,7 @@ static void virtio_write16(VIRTIODevice *s, virtio_phys_addr_t addr,
     if (!ptr)
         return;
     *(uint16_t *)ptr = val;
+    atomic_thread_fence(memory_order_release);
 }
 
 static void virtio_write32(VIRTIODevice *s, virtio_phys_addr_t addr,
@@ -241,6 +244,7 @@ static void virtio_write32(VIRTIODevice *s, virtio_phys_addr_t addr,
     if (!ptr)
         return;
     *(uint32_t *)ptr = val;
+    atomic_thread_fence(memory_order_release);
 }
 
 static inline int min_int(int a, int b) {
@@ -258,6 +262,7 @@ static int virtio_memcpy_from_ram(VIRTIODevice *s, uint8_t *buf,
         ptr = s->get_ram_ptr(s, addr);
         if (!ptr)
             return -1;
+        atomic_thread_fence(memory_order_acquire);
         memcpy(buf, ptr, l);
         addr += l;
         buf += l;
@@ -278,6 +283,7 @@ static int virtio_memcpy_to_ram(VIRTIODevice *s, virtio_phys_addr_t addr,
         if (!ptr)
             return -1;
         memcpy(ptr, buf, l);
+        atomic_thread_fence(memory_order_release);
         addr += l;
         buf += l;
         count -= l;
