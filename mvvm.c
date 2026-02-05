@@ -231,6 +231,7 @@ int
 mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
             const char *initrd_path, const char *kernel_args)
 {
+    int ret = 0;
     void *bz_image = NULL;
     size_t bz_image_size = 0;
     uint32_t setup_size = 0;
@@ -238,8 +239,20 @@ mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
     char *cmd_line = NULL;
 
     if (map_file(kernel_path, &bz_image_size, &bz_image) < 0) {
+        bz_image = NULL;
         fprintf(stderr, "failed to load kernel.\n");
-        return -1;
+        ret = -1;
+        goto end;
+    }
+    if (bz_image_size >= 190 * 1024 * 1024) {
+        fprintf(stderr, "kernel should be less than 190 MB.\n");
+        ret = -1;
+        goto end;
+    }
+    if (bz_image_size <= 128 * 1024) {
+        fprintf(stderr, "kernel should be at least 128 KB.\n");
+        ret = -1;
+        goto end;
     }
     // Setup boot parameters at 0x10000
     zeropage = (struct boot_params *)(vm->memory + 0x10000);
@@ -254,11 +267,15 @@ mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
     zeropage->hdr.cmd_line_ptr = 0x20000;
     // Copy command line
     cmd_line = (char *)(vm->memory + 0x20000);
-    memcpy(cmd_line, kernel_args, strlen(kernel_args) + 1);
+    if (strnlen(kernel_args, 2000) >= 2000) {
+        fprintf(stderr, "invalid kernel args.\n");
+        ret = -1; goto end;
+    }
+    memcpy(cmd_line, kernel_args, strnlen(kernel_args, 2000) + 1);
     // Load initrd
     if (load_initrd(vm, zeropage, initrd_path) < 0) {
         fprintf(stderr, "failed to load initrd\n");
-        return -1;
+        ret = -1; goto end;
     }
     // Copy protected mode kernel to 1MB
     setup_size = (zeropage->hdr.setup_sects + 1) * 512;
@@ -266,8 +283,11 @@ mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
            (char *)bz_image + setup_size,
            bz_image_size - setup_size);
     // cleanup
-    munmap(bz_image, bz_image_size);
-    return 0;
+end:
+    if (bz_image) {
+        munmap(bz_image, bz_image_size);
+    }
+    return ret;
 }
 
 int mvvm_run(struct mvvm *vm) {
