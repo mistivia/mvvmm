@@ -13,6 +13,11 @@
 #include <linux/kvm_para.h>
 #include <asm/bootparam.h>
 
+#define VIRTIO_BLK_MMIO_ADDR (1024LL * 1024 * 1024 * 1024)
+#define VIRTIO_NET_MMIO_ADDR (1024LL * 1024 * 1024 * 1024 + 4 * 1024)
+#define VIRTIO_BLK_IRQ 16
+#define VIRTIO_NET_IRQ 17
+
 static void set_flat_mode(struct kvm_segment *seg) {
     seg->base = 0;
     seg->limit = 0xffffffff;
