@@ -27,17 +27,27 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define VIRTIO_PAGE_SIZE 4096
-
 typedef uint64_t virtio_phys_addr_t;
 
-struct PhysMemoryMap;
-typedef struct PhysMemoryMap PhysMemoryMap;
-struct IRQSignal;
+struct PhysMemoryMapEntry {
+    void *host_mem;
+    uint64_t guest_addr;
+    uint64_t size;
+};
+
+struct PhysMemoryMap {
+    int size;
+    struct PhysMemoryMapEntry entries[0];
+};
+
+struct IRQSignal {
+    int vmfd;
+    int irqline;
+};
 typedef struct IRQSignal IRQSignal;
 
 typedef struct {
-    PhysMemoryMap *mem_map;
+    struct PhysMemoryMap *mem_map;
     uint64_t addr;
     IRQSignal *irq;
 } VIRTIOBusDef;
@@ -55,15 +65,20 @@ void virtio_set_debug(VIRTIODevice *s, int debug_flags);
 
 typedef void BlockDeviceCompletionFunc(void *opaque, int ret);
 
+struct disk_image {
+    int fd;
+    uint64_t size;
+};
+
 typedef struct BlockDevice BlockDevice;
 
 struct BlockDevice {
     int64_t (*get_sector_count)(BlockDevice *bs);
     int (*read_async)(BlockDevice *bs,
-                      uint64_t sector_num, uint8_t *buf, int n,
+                      uint64_t sector_num, uint8_t *buf, int n, // n is sector number
                       BlockDeviceCompletionFunc *cb, void *opaque);
     int (*write_async)(BlockDevice *bs,
-                       uint64_t sector_num, const uint8_t *buf, int n,
+                       uint64_t sector_num, const uint8_t *buf, int n, // n is sector nubmer
                        BlockDeviceCompletionFunc *cb, void *opaque);
     void *opaque;
 };

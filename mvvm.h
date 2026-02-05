@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 
+#include "virtio.h"
 #include "serial.h"
 
 struct mvvm {
@@ -12,6 +13,7 @@ struct mvvm {
     void* memory;
     size_t memory_size;
     struct serial serial;
+    VIRTIODevice *blk;
 };
 
 int mvvm_init(struct mvvm *vm, uint64_t mem_size);

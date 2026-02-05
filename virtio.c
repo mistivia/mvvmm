@@ -32,6 +32,7 @@
 #include <stdatomic.h>
 
 #include "virtio.h"
+#include "config.h"
 
 //#define DEBUG_VIRTIO
 
@@ -98,7 +99,7 @@ typedef int VIRTIODeviceRecvFunc(VIRTIODevice *s1, int queue_idx,
 typedef uint8_t *VIRTIOGetRAMPtrFunc(VIRTIODevice *s, virtio_phys_addr_t paddr);
 
 struct VIRTIODevice {
-    PhysMemoryMap *mem_map;
+    struct PhysMemoryMap *mem_map;
     /* MMIO only */
     IRQSignal *irq;
     VIRTIOGetRAMPtrFunc *get_ram_ptr;
@@ -786,8 +787,6 @@ typedef struct {
 #define VIRTIO_BLK_S_IOERR  1
 #define VIRTIO_BLK_S_UNSUPP 2
 
-#define SECTOR_SIZE 512
-
 static void virtio_block_req_end(VIRTIODevice *s, int ret)
 {
     VIRTIOBlockDevice *s1 = (VIRTIOBlockDevice *)s;
@@ -863,7 +862,7 @@ static int virtio_block_recv_request(VIRTIODevice *s, int queue_idx,
         s1->req.write_size = write_size;
         ret = bs->read_async(bs, h.sector_num, s1->req.buf, 
                              (write_size - 1) / SECTOR_SIZE,
-                             virtio_block_req_cb, s);
+                             virtio_block_req_cb, s1);
         if (ret > 0) {
             /* asyncronous read */
             s1->req_in_progress = true;

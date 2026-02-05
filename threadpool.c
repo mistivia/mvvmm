@@ -39,8 +39,8 @@ struct thread_pool*
 new_thread_pool()
 {
     struct thread_pool *pool = malloc(sizeof(struct thread_pool));
-    pthread_mutex_init(&pool->lock, NULL);
     memset(pool, 0, sizeof(struct thread_pool));
+    pthread_mutex_init(&pool->lock, NULL);
     pool->worker_num = THREAD_NUM;
     pool->workers = malloc(sizeof(struct worker_thread*) * pool->worker_num);
     memset(pool->workers, 0, sizeof(struct worker_thread*) * pool->worker_num);
