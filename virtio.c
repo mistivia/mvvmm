@@ -440,6 +440,7 @@ static void virtio_consume_desc(VIRTIODevice *s,
 
     s->int_status |= 1;
     set_irq(s->irq, 1);
+    set_irq(s->irq, 0);
 }
 
 static int get_desc_rw_size(VIRTIODevice *s, 
@@ -742,9 +743,6 @@ void virtio_mmio_write(VIRTIODevice *s, uint32_t offset,
             break;
         case VIRTIO_MMIO_INTERRUPT_ACK:
             s->int_status &= ~val;
-            if (s->int_status == 0) {
-                set_irq(s->irq, 0);
-            }
             break;
         }
     } else {
@@ -761,9 +759,12 @@ void virtio_set_debug(VIRTIODevice *s, int debug)
 
 void virtio_config_change_notify(VIRTIODevice *s)
 {
+    pthread_mutex_lock(&s->lock);
     /* INT_CONFIG interrupt */
     s->int_status |= 2;
     set_irq(s->irq, 1);
+    set_irq(s->irq, 0);
+    pthread_mutex_unlock(&s->lock);
 }
 
 /*********************************************************************/
