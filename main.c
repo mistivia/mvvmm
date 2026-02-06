@@ -75,6 +75,7 @@ void sigint_handler(int sig) {
 struct cmd_opts {
     const char *kernel_path;
     const char *initrd_path; // can be null
+    const char *disk_path; // can be null
     uint64_t memory_size; // default 1GB
     const char *kernel_cmdline; // default "console=ttyS0 debug"
 };
@@ -143,6 +144,7 @@ parse_opts(int argc, char **argv)
     struct cmd_opts opts = {
         .kernel_path = NULL,
         .initrd_path = NULL,
+        .disk_path = NULL,
         .memory_size = 1024LL * 1024 * 1024,
         .kernel_cmdline = DEFAULT_KERNEL_CMDLINE
     };
@@ -153,13 +155,16 @@ parse_opts(int argc, char **argv)
     // Suppress getopt's default error messages for manual handling
     opterr = 0;
 
-    while ((opt = getopt(argc, argv, "k:i:m:a:h")) != -1) {
+    while ((opt = getopt(argc, argv, "k:i:m:a:h:d:")) != -1) {
         switch (opt) {
         case 'k':
             opts.kernel_path = optarg;
             break;
         case 'i':
             opts.initrd_path = optarg;
+            break;
+        case 'd':
+            opts.disk_path = optarg;
             break;
         case 'm': {
             uint64_t mem_size;
@@ -179,8 +184,9 @@ parse_opts(int argc, char **argv)
             print_usage(stdout, program_name);
             exit(EXIT_SUCCESS);
         case '?':
-            if (optopt == 'k' || optopt == 'i' ||
-                optopt == 'm' || optopt == 'a') {
+            if (optopt == 'k' || optopt == 'i'
+                    || optopt == 'm' || optopt == 'a'
+                    || optopt == 'd') {
                 fprintf(stderr,
                         "Error: Option -%c requires an argument.\n",
                         optopt);
@@ -220,7 +226,7 @@ print_usage(FILE *stream, const char *program_name)
 {
     fprintf(stream,
             "Usage: %s -k VMLINUZ [-i INITRD] [-m MEMORY_SIZE] "
-            "[-a KERNEL_CMDLINE]\n",
+            "[-a KERNEL_CMDLINE] [-d DISK_IMAGE]\n",
             program_name);
     fprintf(stream, "\n");
     fprintf(stream, "Options:\n");
@@ -232,6 +238,8 @@ print_usage(FILE *stream, const char *program_name)
             "  -m MEMORY_SIZE    Memory size with optional K/M/G suffix "
             "(default: 1G)\n");
     fprintf(stream,
+            "  -d DISK_IMG       Path to disk image (optional)\n");
+    fprintf(stream,
             "  -a KERNEL_CMDLINE Kernel command line "
             "(default: \"console=ttyS0 debug\")\n");
     fprintf(stream,
@@ -242,7 +250,7 @@ int main(int argc, char *argv[]) {
     struct mvvm vm = {0};
     struct cmd_opts opts = parse_opts(argc, argv);
     signal(SIGINT, sigint_handler);
-    if (mvvm_init(&vm, opts.memory_size) < 0) {
+    if (mvvm_init(&vm, opts.memory_size, opts.disk_path) < 0) {
         return -1;
     }
     if (mvvm_load_kernel(&vm, opts.kernel_path, opts.initrd_path, opts.kernel_cmdline) < 0) {

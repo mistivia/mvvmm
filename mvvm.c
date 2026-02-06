@@ -75,7 +75,7 @@ static int init_cpu(int kvm_fd, int cpu_fd) {
     return 0;
 }
 
-int mvvm_init(struct mvvm *self, uint64_t mem_size) {
+int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk) {
     struct kvm_pit_config pit = {0};
     struct kvm_userspace_memory_region mem = {0};
     
@@ -134,9 +134,11 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size) {
     // Initialize serial port
     serial_init(&self->serial);
     // init virtio block device
-    if (mvvm_init_virtio_blk(self, "./disk.img") < 0) {
-        fprintf(stderr, "mvvm init error, failed to load disk.\n");
-        return -1;
+    if (disk != NULL) {
+        if (mvvm_init_virtio_blk(self, disk) < 0) {
+            fprintf(stderr, "mvvm init error, failed to load disk.\n");
+            return -1;
+        }
     }
     return 0;
 }
@@ -236,6 +238,22 @@ load_initrd(struct mvvm *vm, struct boot_params *zeropage,
     return 0;
 }
 
+char *cmdline_concat(char *buf, const char *new) {
+    char *ret = NULL;
+    size_t n1 = strnlen(buf, 2000);
+    size_t n2 = strlen(new);
+    if (n1 + n2 >= 2000) {
+        free(buf);
+        return NULL;
+    }
+    ret = malloc(n1 + n2 + 1);
+    memcpy(ret, buf, n1);
+    memcpy(ret+n1, new, n2);
+    ret[n1+n2] = 0;
+    free(buf);
+    return ret;
+}
+
 int
 mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
             const char *initrd_path, const char *kernel_args)
@@ -276,11 +294,21 @@ mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
     zeropage->hdr.cmd_line_ptr = 0x20000;
     // Copy command line
     cmd_line = (char *)(vm->memory + 0x20000);
-    if (strnlen(kernel_args, 2000) >= 2000) {
+    char *cmdline_buf = strdup(kernel_args);
+    if (vm->blk) {
+        cmdline_buf = cmdline_concat(cmdline_buf, VIRTIO_BLK_CMDLINE);
+        if (cmdline_buf == NULL) {
+            fprintf(stderr, "invalid kernel args.\n");
+            ret = -1; goto end;
+        }
+    }
+    if (strnlen(cmdline_buf, 2000) >= 2000) {
         fprintf(stderr, "invalid kernel args.\n");
+        free(cmdline_buf);
         ret = -1; goto end;
     }
-    memcpy(cmd_line, kernel_args, strnlen(kernel_args, 2000) + 1);
+    memcpy(cmd_line, cmdline_buf, strnlen(cmdline_buf, 2000) + 1);
+    free(cmdline_buf);
     // Load initrd
     if (load_initrd(vm, zeropage, initrd_path) < 0) {
         fprintf(stderr, "failed to load initrd\n");
