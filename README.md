@@ -6,6 +6,16 @@ A small VMM on KVM with just enough features.
 
     make
 
+## Linux Kernel Requirements
+
+Kernel must be built with following configurations:
+
+- CONFIG_SERIAL_8250
+- CONFIG_VIRTIO_MMIO
+- CONFIG_VIRTIO_MMIO_CMDLINE_DEVICES
+- CONFIG_VIRTIO_BLK
+- CONFIG_VIRTIO_NET
+
 ## Test
 
 Get a vmlinuz and initrd, then:
