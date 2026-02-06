@@ -62,8 +62,8 @@ void virtio_mmio_write(VIRTIODevice *s, uint32_t offset,
 void virtio_set_debug(VIRTIODevice *s, int debug_flags);
 
 /* block device */
-
-typedef void BlockDeviceCompletionFunc(void *opaque, int ret);
+struct blk_io_callback_arg;
+typedef void BlockDeviceCompletionFunc(struct blk_io_callback_arg *callback_arg, int ret);
 
 struct disk_image {
     int fd;
@@ -72,14 +72,27 @@ struct disk_image {
 
 typedef struct BlockDevice BlockDevice;
 
+typedef struct {
+    uint32_t type;
+    uint8_t *buf;
+    int write_size;
+    int queue_idx;
+    int desc_idx;
+} BlockRequest;
+
+struct blk_io_callback_arg {
+    VIRTIODevice *s;
+    BlockRequest req;
+};
+
 struct BlockDevice {
     int64_t (*get_sector_count)(BlockDevice *bs);
     int (*read_async)(BlockDevice *bs,
                       uint64_t sector_num, uint8_t *buf, int n, // n is sector number
-                      BlockDeviceCompletionFunc *cb, void *opaque);
+                      BlockDeviceCompletionFunc *cb, struct blk_io_callback_arg *cbarg);
     int (*write_async)(BlockDevice *bs,
                        uint64_t sector_num, const uint8_t *buf, int n, // n is sector nubmer
-                       BlockDeviceCompletionFunc *cb, void *opaque);
+                       BlockDeviceCompletionFunc *cb, struct blk_io_callback_arg *cbarg);
     void *opaque;
 };
 

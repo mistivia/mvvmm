@@ -1,5 +1,6 @@
 #include "threadpool.h"
 
+#include <bits/pthreadtypes.h>
 #include <stdio.h>
 #include <pthread.h>
 #include <stdlib.h>
@@ -14,6 +15,8 @@ void *worker_thread_fn(void* arg)
             pthread_cond_wait(&worker->cond, &worker->lock);
         }
         worker->task_fn(worker->arg);
+        worker->task_fn = NULL;
+        worker->arg = NULL;
         pthread_mutex_lock(&worker->pool->lock);
         worker->pool->is_working[worker->id] = false;
         pthread_mutex_unlock(&worker->pool->lock);
@@ -69,5 +72,12 @@ thread_pool_run(struct thread_pool *self, void* (*task_fn)(void*), void *arg)
         }
     }
     pthread_mutex_unlock(&self->lock);
-    return -1;
+    pthread_t th;
+    ret = pthread_create(&th, NULL, task_fn, arg);
+    if (ret != 0) {
+        perror("thread_pool_run pthread_create");
+        return -1;
+    }
+    pthread_detach(th);
+    return 0;
 }

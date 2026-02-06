@@ -333,20 +333,22 @@ int mvvm_run(struct mvvm *vm) {
             printf("KVM_EXIT_SHUTDOWN\n");
             goto exit_loop;
         case KVM_EXIT_MMIO:
-            if (run->mmio.phys_addr << 30 == 1024) {
+            if (run->mmio.phys_addr >> 30 == 1024) {
                 virtiodev = vm->blk;
                 mmio_base_addr = VIRTIO_BLK_MMIO_ADDR;
             } else { // TODO: net device
                 break;
             }
             if (run->mmio.is_write) {
-                virtio_mmio_write(virtiodev, 
+                // fprintf(stderr, "mmio write, addr: 0x%x, data: 0x%x\n", (int)(run->mmio.phys_addr - mmio_base_addr), *(uint32_t*)(run->mmio.data));
+                virtio_mmio_write(virtiodev,
                     run->mmio.phys_addr - mmio_base_addr,
                     *(uint32_t*)(run->mmio.data), run->mmio.len);
             } else {
                 uint32_t val = virtio_mmio_read(virtiodev, 
                     run->mmio.phys_addr - mmio_base_addr, 
                     run->mmio.len);
+                // fprintf(stderr, "mmio read, addr: 0x%x, data: 0x%x\n", (int)(run->mmio.phys_addr - mmio_base_addr), val);
                 *(uint32_t*)(run->mmio.data) = val;
             }
             break;

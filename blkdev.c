@@ -75,7 +75,7 @@ block_get_sector_count(BlockDevice *bs)
 // Asynchronous read operation using thread pool
 static int
 block_read_async(BlockDevice *bs, uint64_t sector_num, uint8_t *buf, int n,
-                 BlockDeviceCompletionFunc *cb, void *opaque)
+                 BlockDeviceCompletionFunc *cb, struct blk_io_callback_arg *opaque)
 {
     struct block_device_ctx *ctx = bs->opaque;
     struct async_io_req *req = NULL;
@@ -104,7 +104,7 @@ block_read_async(BlockDevice *bs, uint64_t sector_num, uint8_t *buf, int n,
 // Asynchronous write operation using thread pool
 static int
 block_write_async(BlockDevice *bs, uint64_t sector_num, const uint8_t *buf,
-                  int n, BlockDeviceCompletionFunc *cb, void *opaque)
+                  int n, BlockDeviceCompletionFunc *cb, struct blk_io_callback_arg *opaque)
 {
     struct block_device_ctx *ctx = bs->opaque;
     struct async_io_req *req = NULL;;
@@ -161,7 +161,7 @@ mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     }
     ctx->size = st.st_size;
     // Create thread pool for async I/O operations
-    ctx->pool = new_thread_pool(2);
+    ctx->pool = new_thread_pool(16);
     if (!ctx->pool) {
         fprintf(stderr, "failed to create thread pool\n");
         goto fail;

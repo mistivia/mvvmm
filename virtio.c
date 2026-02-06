@@ -769,20 +769,9 @@ void virtio_config_change_notify(VIRTIODevice *s)
 /*********************************************************************/
 /* block device */
 
-typedef struct {
-    uint32_t type;
-    uint8_t *buf;
-    int write_size;
-    int queue_idx;
-    int desc_idx;
-} BlockRequest;
-
 typedef struct VIRTIOBlockDevice {
     VIRTIODevice common;
     BlockDevice *bs;
-
-    bool req_in_progress;
-    BlockRequest req; /* request in progress */
 } VIRTIOBlockDevice;
 
 typedef struct {
@@ -800,18 +789,18 @@ typedef struct {
 #define VIRTIO_BLK_S_IOERR  1
 #define VIRTIO_BLK_S_UNSUPP 2
 
-static void virtio_block_req_end(VIRTIODevice *s, int ret)
+static void virtio_block_req_end(struct blk_io_callback_arg *arg, int ret)
 {
-    VIRTIOBlockDevice *s1 = (VIRTIOBlockDevice *)s;
+    VIRTIODevice *s = arg->s;
     int write_size = {0};
-    int queue_idx = s1->req.queue_idx;
-    int desc_idx = s1->req.desc_idx;
+    int queue_idx = arg->req.queue_idx;
+    int desc_idx = arg->req.desc_idx;
     uint8_t *buf = {0}, buf1[1] = {0};
 
-    switch(s1->req.type) {
+    switch(arg->req.type) {
     case VIRTIO_BLK_T_IN:
-        write_size = s1->req.write_size;
-        buf = s1->req.buf;
+        write_size = arg->req.write_size;
+        buf = arg->req.buf;
         if (ret < 0) {
             buf[write_size - 1] = VIRTIO_BLK_S_IOERR;
         } else {
@@ -834,18 +823,16 @@ static void virtio_block_req_end(VIRTIODevice *s, int ret)
     }
 }
 
-static void virtio_block_req_cb(void *opaque, int ret)
+static void virtio_block_req_cb(struct blk_io_callback_arg *arg, int ret)
 {
-    VIRTIODevice *s = opaque;
-    VIRTIOBlockDevice *s1 = (VIRTIOBlockDevice *)s;
+    VIRTIODevice *s = arg->s;
     pthread_mutex_lock(&s->lock);
 
-    virtio_block_req_end(s, ret);
-    
-    s1->req_in_progress = false;
+    virtio_block_req_end(arg, ret);
 
     /* handle next requests */
-    queue_notify((VIRTIODevice *)s, s1->req.queue_idx);
+    queue_notify((VIRTIODevice *)s, arg->req.queue_idx);
+    free(arg);
     pthread_mutex_unlock(&s->lock);
 }
 
@@ -859,28 +846,26 @@ static int virtio_block_recv_request(VIRTIODevice *s, int queue_idx,
     BlockRequestHeader h = {0};
     uint8_t *buf = {0};
     int len, ret = {0};
-
-    if (s1->req_in_progress)
-        return -1;
     
     if (memcpy_from_queue(s, &h, queue_idx, desc_idx, 0, sizeof(h)) < 0)
         return 0;
-    s1->req.type = h.type;
-    s1->req.queue_idx = queue_idx;
-    s1->req.desc_idx = desc_idx;
+    struct blk_io_callback_arg *iocb_arg = malloc(sizeof(struct blk_io_callback_arg));
+    *iocb_arg = (struct blk_io_callback_arg){0};
+    iocb_arg->s = s;
+    iocb_arg->req.type = h.type;
+    iocb_arg->req.queue_idx = queue_idx;
+    iocb_arg->req.desc_idx = desc_idx;
     switch(h.type) {
     case VIRTIO_BLK_T_IN:
-        s1->req.buf = malloc(write_size);
-        memset(s1->req.buf, 0, write_size);
-        s1->req.write_size = write_size;
-        ret = bs->read_async(bs, h.sector_num, s1->req.buf, 
+        iocb_arg->req.buf = malloc(write_size);
+        memset(iocb_arg->req.buf, 0, write_size);
+        iocb_arg->req.write_size = write_size;
+        ret = bs->read_async(bs, h.sector_num, iocb_arg->req.buf, 
                              (write_size - 1) / SECTOR_SIZE,
-                             virtio_block_req_cb, s1);
-        if (ret > 0) {
-            /* asyncronous read */
-            s1->req_in_progress = true;
-        } else {
-            virtio_block_req_end(s, ret);
+                             virtio_block_req_cb, iocb_arg);
+        if (ret < 0) {
+            virtio_block_req_end(iocb_arg, ret);
+            free(iocb_arg);
         }
         break;
     case VIRTIO_BLK_T_OUT:
@@ -897,13 +882,11 @@ static int virtio_block_recv_request(VIRTIODevice *s, int queue_idx,
         memset(buf, 0, len);
         memcpy_from_queue(s, buf, queue_idx, desc_idx, sizeof(h), len);
         ret = bs->write_async(bs, h.sector_num, buf, len / SECTOR_SIZE,
-                              virtio_block_req_cb, s);
-        free(buf);
-        if (ret > 0) {
-            /* asyncronous write */
-            s1->req_in_progress = true;
-        } else {
-            virtio_block_req_end(s, ret);
+                              virtio_block_req_cb, iocb_arg);
+        if (ret < 0) {
+            free(buf);
+            virtio_block_req_end(iocb_arg, ret);
+            free(iocb_arg);
         }
         break;
     default:

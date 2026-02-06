@@ -8,6 +8,7 @@
 
 #include <termios.h>
 
+#include "config.h"
 #include "mvvm.h"
 #include "serial.h"
 
@@ -143,7 +144,7 @@ parse_opts(int argc, char **argv)
         .kernel_path = NULL,
         .initrd_path = NULL,
         .memory_size = 1024LL * 1024 * 1024,
-        .kernel_cmdline = "console=ttyS0 debug"
+        .kernel_cmdline = DEFAULT_KERNEL_CMDLINE
     };
 
     int opt = 0;
