@@ -72,12 +72,5 @@ thread_pool_run(struct thread_pool *self, void* (*task_fn)(void*), void *arg)
         }
     }
     pthread_mutex_unlock(&self->lock);
-    pthread_t th;
-    ret = pthread_create(&th, NULL, task_fn, arg);
-    if (ret != 0) {
-        perror("thread_pool_run pthread_create");
-        return -1;
-    }
-    pthread_detach(th);
-    return 0;
+    return -1;
 }
