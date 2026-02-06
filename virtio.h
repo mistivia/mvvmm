@@ -1,7 +1,8 @@
 /*
- * VIRTIO driver
+ * VIRTIO device
  * 
  * Copyright (c) 2016 Fabrice Bellard
+ * Copyright (c) 2026 Mistivia <i@mistivia.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -48,7 +49,6 @@ typedef struct IRQSignal IRQSignal;
 
 typedef struct {
     struct PhysMemoryMap *mem_map;
-    uint64_t addr;
     IRQSignal *irq;
 } VIRTIOBusDef;
 

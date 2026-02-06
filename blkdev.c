@@ -33,11 +33,11 @@ struct async_io_req {
 
 // Worker function executed by thread pool for disk I/O operations
 static void*
-block_io_worker(void *arg)
+block_io_worker_fn(void *arg)
 {
     struct async_io_req *req = arg;
-    ssize_t n;
-    int ret;
+    ssize_t n = 0;
+    int ret = 0;
 
     // Perform actual I/O using pread/pwrite for thread safety
     if (req->is_write) {
@@ -48,9 +48,9 @@ block_io_worker(void *arg)
 
     // Determine return code based on operation result
     if (n < 0) {
-        ret = -errno;
+        ret = -1;
     } else if ((size_t)n != req->count) {
-        ret = -EIO;
+        ret = -1;
     } else {
         ret = 0;
     }
@@ -78,11 +78,11 @@ block_read_async(BlockDevice *bs, uint64_t sector_num, uint8_t *buf, int n,
                  BlockDeviceCompletionFunc *cb, void *opaque)
 {
     struct block_device_ctx *ctx = bs->opaque;
-    struct async_io_req *req;
+    struct async_io_req *req = NULL;
 
     req = malloc(sizeof(*req));
     if (!req) {
-        return -ENOMEM;
+        return -1;
     }
 
     req->fd = ctx->fd;
@@ -93,7 +93,7 @@ block_read_async(BlockDevice *bs, uint64_t sector_num, uint8_t *buf, int n,
     req->opaque = opaque;
     req->is_write = 0;
 
-    if (thread_pool_run(ctx->pool, block_io_worker, req) < 0) {
+    if (thread_pool_run(ctx->pool, block_io_worker_fn, req) < 0) {
         free(req);
         return -1;
     }
@@ -107,7 +107,7 @@ block_write_async(BlockDevice *bs, uint64_t sector_num, const uint8_t *buf,
                   int n, BlockDeviceCompletionFunc *cb, void *opaque)
 {
     struct block_device_ctx *ctx = bs->opaque;
-    struct async_io_req *req;
+    struct async_io_req *req = NULL;;
 
     req = malloc(sizeof(*req));
     if (!req) {
@@ -123,7 +123,7 @@ block_write_async(BlockDevice *bs, uint64_t sector_num, const uint8_t *buf,
     req->opaque = opaque;
     req->is_write = 1;
 
-    if (thread_pool_run(ctx->pool, block_io_worker, req) < 0) {
+    if (thread_pool_run(ctx->pool, block_io_worker_fn, req) < 0) {
         free(req);
         return -1;
     }
@@ -142,35 +142,30 @@ mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     struct stat st = {0};
     VIRTIOBusDef bus = {0};
     int ret = -1;
-
     // Allocate block device context
     ctx = calloc(1, sizeof(*ctx));
     if (!ctx) {
         fprintf(stderr, "failed to allocate block device context\n");
         return -1;
     }
-
     // Open disk image file
     ctx->fd = open(disk_path, O_RDWR);
     if (ctx->fd < 0) {
-        perror("open disk image");
+        perror("mvvm_init_virtio_blk, open disk image");
         goto fail;
     }
-
     // Get file size
     if (fstat(ctx->fd, &st) < 0) {
-        perror("fstat disk image");
+        perror("mvvm_init_virtio_blk, fstat disk image");
         goto fail;
     }
     ctx->size = st.st_size;
-
     // Create thread pool for async I/O operations
-    ctx->pool = new_thread_pool();
+    ctx->pool = new_thread_pool(2);
     if (!ctx->pool) {
         fprintf(stderr, "failed to create thread pool\n");
         goto fail;
     }
-
     // Allocate and initialize BlockDevice structure
     bs = calloc(1, sizeof(*bs));
     if (!bs) {
@@ -182,7 +177,6 @@ mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     bs->read_async = block_read_async;
     bs->write_async = block_write_async;
     bs->opaque = ctx;
-
     // Allocate PhysMemoryMap with one entry for guest memory
     mem_map = malloc(sizeof(*mem_map) + sizeof(struct PhysMemoryMapEntry));
     if (!mem_map) {
@@ -193,7 +187,6 @@ mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     mem_map->entries[0].host_mem = self->memory;
     mem_map->entries[0].guest_addr = 0;
     mem_map->entries[0].size = self->memory_size;
-
     // Allocate IRQ signal structure
     irq = malloc(sizeof(*irq));
     if (!irq) {
@@ -202,19 +195,15 @@ mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     }
     irq->vmfd = self->vm_fd;
     irq->irqline = VIRTIO_BLK_IRQ;
-
     // Setup virtio bus definition
     bus.mem_map = mem_map;
-    bus.addr = VIRTIO_BLK_MMIO_ADDR;
     bus.irq = irq;
-
     // Initialize virtio block device
     self->blk = virtio_block_init(&bus, bs);
     if (!self->blk) {
         fprintf(stderr, "failed to initialize virtio block device\n");
         goto fail;
     }
-
     // Note: mem_map and irq are now owned by virtio device layer
     // ctx and bs are referenced by virtio device for callbacks
     return 0;

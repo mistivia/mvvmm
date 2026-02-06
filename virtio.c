@@ -1,7 +1,8 @@
 /*
- * VIRTIO driver
+ * VIRTIO device
  * 
  * Copyright (c) 2016 Fabrice Bellard
+ * Copyright (c) 2026 Mistivia <i@mistivia.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -30,6 +31,8 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <stdatomic.h>
+#include <linux/kvm.h>
+#include <sys/ioctl.h>
 
 #include "virtio.h"
 #include "config.h"
@@ -188,7 +191,14 @@ static void virtio_reset(VIRTIODevice *s)
 }
 
 static uint8_t* guest_addr_to_host_addr(VIRTIODevice *s, uint64_t guest_addr) {
-    // TODO
+    struct PhysMemoryMap *mem_map = s->mem_map;
+    for (int i = 0; i < mem_map->size; i++) {
+        struct PhysMemoryMapEntry *entry = &mem_map->entries[i];
+        if (guest_addr >= entry->guest_addr
+                && guest_addr < entry->guest_addr + entry->size) {
+            return entry->host_mem + (guest_addr - entry->guest_addr);
+        }
+    }
     return NULL;
 }
 
@@ -405,8 +415,11 @@ static int memcpy_to_queue(VIRTIODevice *s,
                                 count, true);
 }
 
-static void set_irq(IRQSignal *irq, int level) {
-    // TODO
+static void set_irq(IRQSignal *irqsig, int level) {
+    struct kvm_irq_level irq = {0};
+    irq.irq = irqsig->irqline;
+    irq.level = level;
+    ioctl(irqsig->vmfd, KVM_IRQ_LINE, &irq);
 }
 
 /* signal that the descriptor has been consumed */

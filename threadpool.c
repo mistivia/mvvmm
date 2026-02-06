@@ -5,8 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define THREAD_NUM 8
-
 void *worker_thread_fn(void* arg)
 {
     struct worker_thread *worker = arg;
@@ -36,12 +34,12 @@ new_worker_thread(struct thread_pool *pool, int id)
 }
 
 struct thread_pool*
-new_thread_pool()
+new_thread_pool(int thread_num)
 {
     struct thread_pool *pool = malloc(sizeof(struct thread_pool));
     memset(pool, 0, sizeof(struct thread_pool));
     pthread_mutex_init(&pool->lock, NULL);
-    pool->worker_num = THREAD_NUM;
+    pool->worker_num = thread_num;
     pool->workers = malloc(sizeof(struct worker_thread*) * pool->worker_num);
     memset(pool->workers, 0, sizeof(struct worker_thread*) * pool->worker_num);
     pool->is_working = malloc(sizeof(bool) * pool->worker_num);
@@ -71,12 +69,5 @@ thread_pool_run(struct thread_pool *self, void* (*task_fn)(void*), void *arg)
         }
     }
     pthread_mutex_unlock(&self->lock);
-    pthread_t newth;
-    ret = pthread_create(&newth, NULL, task_fn, arg);
-    if (ret != 0) {
-        perror("thread pool run, pthread_create");
-        return -1;
-    }
-    pthread_detach(newth);
-    return 0;
+    return -1;
 }

@@ -22,7 +22,7 @@ struct worker_thread {
     int id;
 };
 
-struct thread_pool* new_thread_pool();
+struct thread_pool* new_thread_pool(int thread_num);
 
 int
 thread_pool_run(struct thread_pool *self, void* (*task_fn)(void*), void *arg);

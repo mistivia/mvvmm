@@ -133,7 +133,11 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size) {
     }
     // Initialize serial port
     serial_init(&self->serial);
-    mvvm_init_virtio_blk(self, "./disk.img");
+    // init virtio block device
+    if (mvvm_init_virtio_blk(self, "./disk.img") < 0) {
+        fprintf(stderr, "mvvm init error, failed to load disk.\n");
+        return -1;
+    }
     return 0;
 }
 

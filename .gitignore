@@ -3,3 +3,4 @@ initrd
 vmlinuz
 mvvmm
 tmp.md
+*.img
