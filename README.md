@@ -1,6 +1,6 @@
 # Minimal Viable Virtual Machine Monitor
 
-A small VMM on KVM with just enough features.
+A small VMM on KVM with just enough features, not ready for production, but easy for hacking and tweaking.
 
 ## Build
 
