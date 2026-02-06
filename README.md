@@ -2,7 +2,7 @@
 
 A small VMM built on KVM.
 
-![Snipaste_2026-02-04_15-36-33](https://github.com/user-attachments/assets/3b52cb10-e57a-437c-b675-f90a0535ed34)
+<img width="789" height="624" alt="image" src="https://github.com/user-attachments/assets/45422e2c-f639-4508-89f8-4c7a92c28d95" />
 
 ## Build
 
@@ -14,10 +14,11 @@ Get a vmlinuz and initrd, then:
 
     ./mvvmm vmlinuz initrd
 
-## TODO
+## Current Status
 
-- virtio-blk emulation
-- virtio-net emulation
+- [x] Boot Linux
+- [x] Support virtio-blk
+- [ ] Support virtio-net
 
 
 ## License
