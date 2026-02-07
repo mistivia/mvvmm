@@ -27,7 +27,7 @@ struct mvvm {
     VIRTIODevice *net;
 };
 
-int mvvm_init(struct mvvm *vm, uint64_t mem_size, const char *disk);
+int mvvm_init(struct mvvm *vm, uint64_t mem_size, const char *disk, const char *network);
 int mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
                      const char *initrd_path, const char *kernel_args);
 int mvvm_run(struct mvvm *vm);

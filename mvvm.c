@@ -76,7 +76,7 @@ static int init_cpu(int kvm_fd, int cpu_fd) {
     return 0;
 }
 
-int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk) {
+int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char *network) {
     struct kvm_pit_config pit = {0};
     struct kvm_userspace_memory_region mem = {0};
     
@@ -151,9 +151,11 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk) {
             return -1;
         }
     }
-    if (mvvm_init_virtio_net(self, "vm0") < 0) {
-        fprintf(stderr, "mvvm init error, failed to load disk.\n");
-        return -1;
+    if (network != NULL) {
+        if (mvvm_init_virtio_net(self, "vm0") < 0) {
+            fprintf(stderr, "mvvm init error, failed to open tap interface.\n");
+            return -1;
+        }
     }
     return 0;
 }
@@ -320,7 +322,13 @@ mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
             ret = -1; goto end;
         }
     }
-    cmdline_buf = cmdline_concat(cmdline_buf, VIRTIO_NET_CMDLINE);
+    if (vm->net) {
+        cmdline_buf = cmdline_concat(cmdline_buf, VIRTIO_NET_CMDLINE);
+        if (cmdline_buf == NULL) {
+            fprintf(stderr, "invalid kernel args.\n");
+            ret = -1; goto end;
+        }
+    }
     if (strnlen(cmdline_buf, 2000) >= 2000) {
         fprintf(stderr, "invalid kernel args.\n");
         free(cmdline_buf);

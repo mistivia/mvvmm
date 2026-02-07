@@ -78,6 +78,7 @@ struct cmd_opts {
     const char *disk_path; // can be null
     uint64_t memory_size; // default 1GB
     const char *kernel_cmdline; // default "console=ttyS0 debug"
+    const char *tap_ifname;
 };
 
 static void print_usage(FILE *stream, const char *program_name);
@@ -145,6 +146,7 @@ parse_opts(int argc, char **argv)
         .kernel_path = NULL,
         .initrd_path = NULL,
         .disk_path = NULL,
+        .tap_ifname = NULL,
         .memory_size = 1024LL * 1024 * 1024,
         .kernel_cmdline = DEFAULT_KERNEL_CMDLINE
     };
@@ -155,7 +157,7 @@ parse_opts(int argc, char **argv)
     // Suppress getopt's default error messages for manual handling
     opterr = 0;
 
-    while ((opt = getopt(argc, argv, "k:i:m:a:h:d:")) != -1) {
+    while ((opt = getopt(argc, argv, "k:i:m:a:h:d:t:")) != -1) {
         switch (opt) {
         case 'k':
             opts.kernel_path = optarg;
@@ -165,6 +167,9 @@ parse_opts(int argc, char **argv)
             break;
         case 'd':
             opts.disk_path = optarg;
+            break;
+        case 't':
+            opts.tap_ifname = optarg;
             break;
         case 'm': {
             uint64_t mem_size;
@@ -186,7 +191,7 @@ parse_opts(int argc, char **argv)
         case '?':
             if (optopt == 'k' || optopt == 'i'
                     || optopt == 'm' || optopt == 'a'
-                    || optopt == 'd') {
+                    || optopt == 'd' || optopt == 't') {
                 fprintf(stderr,
                         "Error: Option -%c requires an argument.\n",
                         optopt);
@@ -240,6 +245,8 @@ print_usage(FILE *stream, const char *program_name)
     fprintf(stream,
             "  -d DISK_IMG       Path to disk image (optional)\n");
     fprintf(stream,
+            "  -t TAP_IFNAME     Tap interface name (optional)\n");
+    fprintf(stream,
             "  -a KERNEL_CMDLINE Kernel command line "
             "(default: \"console=ttyS0 debug\")\n");
     fprintf(stream,
@@ -250,7 +257,7 @@ int main(int argc, char *argv[]) {
     struct mvvm vm = {0};
     struct cmd_opts opts = parse_opts(argc, argv);
     signal(SIGINT, sigint_handler);
-    if (mvvm_init(&vm, opts.memory_size, opts.disk_path) < 0) {
+    if (mvvm_init(&vm, opts.memory_size, opts.disk_path, opts.tap_ifname) < 0) {
         return -1;
     }
     if (mvvm_load_kernel(&vm, opts.kernel_path, opts.initrd_path, opts.kernel_cmdline) < 0) {
