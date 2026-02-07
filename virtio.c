@@ -36,6 +36,7 @@
 
 #include "virtio.h"
 #include "config.h"
+#include "mvvm.h"
 
 //#define DEBUG_VIRTIO
 
@@ -102,7 +103,7 @@ typedef int VIRTIODeviceRecvFunc(VIRTIODevice *s1, int queue_idx,
 typedef uint8_t *VIRTIOGetRAMPtrFunc(VIRTIODevice *s, virtio_phys_addr_t paddr);
 
 struct VIRTIODevice {
-    struct PhysMemoryMap *mem_map;
+    struct guest_mem_map *mem_map;
     /* MMIO only */
     IRQSignal *irq;
     VIRTIOGetRAMPtrFunc *get_ram_ptr;
@@ -191,9 +192,9 @@ static void virtio_reset(VIRTIODevice *s)
 }
 
 static uint8_t* guest_addr_to_host_addr(VIRTIODevice *s, uint64_t guest_addr) {
-    struct PhysMemoryMap *mem_map = s->mem_map;
+    struct guest_mem_map *mem_map = s->mem_map;
     for (int i = 0; i < mem_map->size; i++) {
-        struct PhysMemoryMapEntry *entry = &mem_map->entries[i];
+        struct guest_mem_map_entry *entry = &mem_map->entries[i];
         if (guest_addr >= entry->guest_addr
                 && guest_addr < entry->guest_addr + entry->size) {
             return entry->host_mem + (guest_addr - entry->guest_addr);
@@ -943,18 +944,15 @@ static int virtio_net_recv_request(VIRTIODevice *s, int queue_idx,
     uint8_t *buf = {0};
     int len = {0};
 
-    if (queue_idx == 1) {
-        /* send to network */
-        if (memcpy_from_queue(s, &h, queue_idx, desc_idx, 0, s1->header_size) < 0)
-            return 0;
-        len = read_size - s1->header_size;
-        buf = malloc(len);
-        memset(buf, 0, len);
-        memcpy_from_queue(s, buf, queue_idx, desc_idx, s1->header_size, len);
-        es->write_packet_to_ether(es, buf, len);
-        free(buf);
-        virtio_consume_desc(s, queue_idx, desc_idx, 0);
-    }
+    if (memcpy_from_queue(s, &h, queue_idx, desc_idx, 0, s1->header_size) < 0)
+        return 0;
+    len = read_size - s1->header_size;
+    buf = malloc(len);
+    memset(buf, 0, len);
+    memcpy_from_queue(s, buf, queue_idx, desc_idx, s1->header_size, len);
+    es->write_packet_to_ether(es, buf, len);
+    free(buf);
+    virtio_consume_desc(s, queue_idx, desc_idx, 0);
     return 0;
 }
 

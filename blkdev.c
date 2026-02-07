@@ -177,16 +177,6 @@ mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     bs->read_async = block_read_async;
     bs->write_async = block_write_async;
     bs->opaque = ctx;
-    // Allocate PhysMemoryMap with one entry for guest memory
-    mem_map = malloc(sizeof(*mem_map) + sizeof(struct PhysMemoryMapEntry));
-    if (!mem_map) {
-        fprintf(stderr, "failed to allocate PhysMemoryMap\n");
-        goto fail;
-    }
-    mem_map->size = 1;
-    mem_map->entries[0].host_mem = self->memory;
-    mem_map->entries[0].guest_addr = 0;
-    mem_map->entries[0].size = self->memory_size;
     // Allocate IRQ signal structure
     irq = malloc(sizeof(*irq));
     if (!irq) {
@@ -196,7 +186,7 @@ mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     irq->vmfd = self->vm_fd;
     irq->irqline = VIRTIO_BLK_IRQ;
     // Setup virtio bus definition
-    bus.mem_map = mem_map;
+    bus.mem_map = self->mem_map;
     bus.irq = irq;
     // Initialize virtio block device
     self->blk = virtio_block_init(&bus, bs);

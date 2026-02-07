@@ -17,8 +17,7 @@ $(TARGET): $(C_OBJS)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 test: mvvmm
-	./mvvmm -k ./vmlinuz -i ./initrd -m 1g 2>>mvvmm.err
-# 	./mvvmm -k ./vmlinuz -m 1g 2>>mvvmm.err
+	./mvvmm -k ./vmlinuz -i ./initrd -m 1g -d disk.img 2>>mvvmm.err
 
 clean:
 	rm -f $(C_OBJS) $(TARGET)

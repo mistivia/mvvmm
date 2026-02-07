@@ -30,17 +30,6 @@
 
 typedef uint64_t virtio_phys_addr_t;
 
-struct PhysMemoryMapEntry {
-    void *host_mem;
-    uint64_t guest_addr;
-    uint64_t size;
-};
-
-struct PhysMemoryMap {
-    int size;
-    struct PhysMemoryMapEntry entries[0];
-};
-
 struct IRQSignal {
     int vmfd;
     int irqline;
@@ -48,7 +37,7 @@ struct IRQSignal {
 typedef struct IRQSignal IRQSignal;
 
 typedef struct {
-    struct PhysMemoryMap *mem_map;
+    struct guest_mem_map *mem_map;
     IRQSignal *irq;
 } VIRTIOBusDef;
 

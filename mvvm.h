@@ -6,12 +6,22 @@
 #include "virtio.h"
 #include "serial.h"
 
+struct guest_mem_map_entry {
+    void *host_mem;
+    uint64_t guest_addr;
+    uint64_t size;
+};
+
+struct guest_mem_map {
+    int size;
+    struct guest_mem_map_entry entries[0];
+};
+
 struct mvvm {
     int kvm_fd;
     int vm_fd;
     int cpu_fd;
-    void* memory;
-    size_t memory_size;
+    struct guest_mem_map *mem_map;
     struct serial serial;
     VIRTIODevice *blk;
 };
