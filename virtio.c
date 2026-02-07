@@ -71,7 +71,7 @@
 
 #define MAX_QUEUE 8
 #define MAX_CONFIG_SPACE_SIZE 256
-#define MAX_QUEUE_NUM 16
+#define MAX_QUEUE_NUM 32
 
 typedef struct {
     uint32_t ready; /* 0 or 1 */
@@ -183,12 +183,12 @@ static void virtio_reset(VIRTIODevice *s)
     s->int_status = 0;
     for(i = 0; i < MAX_QUEUE; i++) {
         QueueState *qs = &s->queue[i];
-        qs->ready = 0;
-        qs->num = MAX_QUEUE_NUM;
-        qs->desc_addr = 0;
         qs->avail_addr = 0;
+        qs->desc_addr = 0;
         qs->used_addr = 0;
         qs->last_avail_idx = 0;
+        qs->ready = 0;
+        qs->num = MAX_QUEUE_NUM;
     }
 }
 
@@ -436,6 +436,7 @@ static void virtio_consume_desc(VIRTIODevice *s,
 
     index_addr = qs->used_addr + 2;
     index = virtio_read16(s, index_addr);
+    DEBUG("index: %d\n", index);
 
     ring_addr = qs->used_addr + 4 + (index & (qs->num - 1)) * 8;
     virtio_write32(s, ring_addr, desc_idx);
@@ -734,6 +735,7 @@ void virtio_mmio_write(VIRTIODevice *s, uint32_t offset,
             s->status = val;
             if (val == 0) {
                 /* reset */
+                s->int_status = 0;
                 set_irq(s->irq, 0);
                 virtio_reset(s);
             }
@@ -917,7 +919,7 @@ typedef struct VIRTIONetDevice {
     int header_size;
 } VIRTIONetDevice;
 
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint8_t flags;
     uint8_t gso_type;
     uint16_t hdr_len;
@@ -931,9 +933,6 @@ static int virtio_net_recv_request(VIRTIODevice *s, int queue_idx,
                                    int desc_idx, int read_size,
                                    int write_size)
 {
-    if (queue_idx % 2 != 1) {
-        return 0;
-    }
     VIRTIONetDevice *s1 = (VIRTIONetDevice *)s;
     EthernetDevice *es = s1->es;
     VIRTIONetHeader h = {0};
@@ -949,6 +948,7 @@ static int virtio_net_recv_request(VIRTIODevice *s, int queue_idx,
     es->write_packet_to_ether(es, buf, len);
     free(buf);
     virtio_consume_desc(s, queue_idx, desc_idx, 0);
+    DEBUG("tx packet proc finish, queue idx： %d, len: %d\n", queue_idx, len);
     return 0;
 }
 
@@ -968,6 +968,7 @@ static bool virtio_net_can_write_packet(EthernetDevice *es)
     ret = qs->last_avail_idx != avail_idx;
 end:
     pthread_mutex_unlock(&s->lock);
+    DEBUG("can write packet: %d\n", ret);
     return ret;
 }
 

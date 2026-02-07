@@ -16,8 +16,12 @@
 
 #define MVVMM_DEBUG 1
 
+#if MVVMM_DEBUG != 0
 #define DEBUG(...) do { \
     if (MVVMM_DEBUG) { \
         fprintf(stderr, __VA_ARGS__); \
     } \
 } while (0);
+#else
+#define DEBUG(...)
+#endif
