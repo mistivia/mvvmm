@@ -26,7 +26,7 @@ Get a vmlinuz and initrd, then:
 
 - [x] Boot Linux
 - [x] Support virtio-blk
-- [ ] Support virtio-net
+- [x] Support virtio-net
 
 ## Screenshot
 
