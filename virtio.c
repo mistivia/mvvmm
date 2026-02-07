@@ -33,6 +33,7 @@
 #include <stdatomic.h>
 #include <linux/kvm.h>
 #include <sys/ioctl.h>
+#include <unistd.h>
 
 #include "virtio.h"
 #include "config.h"
@@ -203,14 +204,14 @@ static uint8_t* guest_addr_to_host_addr(VIRTIODevice *s, uint64_t guest_addr) {
     return NULL;
 }
 
-static void virtio_init(VIRTIODevice *s, VIRTIOBusDef *bus,
+static void virtio_init(VIRTIODevice *s, VIRTIOBusDef bus,
                         uint32_t device_id, int config_space_size,
                         VIRTIODeviceRecvFunc *device_recv)
 {
     memset(s, 0, sizeof(*s));
 
-    s->mem_map = bus->mem_map;
-    s->irq = bus->irq;
+    s->mem_map = bus.mem_map;
+    s->irq = bus.irq;
     s->get_ram_ptr = guest_addr_to_host_addr;
 
     s->device_id = device_id;
@@ -428,17 +429,19 @@ static void virtio_consume_desc(VIRTIODevice *s,
                                 int queue_idx, int desc_idx, int desc_len)
 {
     QueueState *qs = &s->queue[queue_idx];
-    virtio_phys_addr_t addr = {0};
+    virtio_phys_addr_t index_addr = 0, ring_addr = {0};
     uint32_t index = {0};
 
-    addr = qs->used_addr + 2;
-    index = virtio_read16(s, addr);
-    virtio_write16(s, addr, index + 1);
+    DEBUG("consume vq, dev: %p, qid: %d, did: %d, len: %d\n", s, queue_idx, desc_idx, desc_len);
 
-    addr = qs->used_addr + 4 + (index & (qs->num - 1)) * 8;
-    virtio_write32(s, addr, desc_idx);
-    virtio_write32(s, addr + 4, desc_len);
+    index_addr = qs->used_addr + 2;
+    index = virtio_read16(s, index_addr);
 
+    ring_addr = qs->used_addr + 4 + (index & (qs->num - 1)) * 8;
+    virtio_write32(s, ring_addr, desc_idx);
+    virtio_write32(s, ring_addr + 4, desc_len);
+    virtio_write16(s, index_addr, index + 1);
+    
     s->int_status |= 1;
     set_irq(s->irq, 1);
     set_irq(s->irq, 0);
@@ -758,16 +761,6 @@ void virtio_set_debug(VIRTIODevice *s, int debug)
     s->debug = debug;
 }
 
-void virtio_config_change_notify(VIRTIODevice *s)
-{
-    pthread_mutex_lock(&s->lock);
-    /* INT_CONFIG interrupt */
-    s->int_status |= 2;
-    set_irq(s->irq, 1);
-    set_irq(s->irq, 0);
-    pthread_mutex_unlock(&s->lock);
-}
-
 /*********************************************************************/
 /* block device */
 
@@ -897,7 +890,7 @@ static int virtio_block_recv_request(VIRTIODevice *s, int queue_idx,
     return 0;
 }
 
-VIRTIODevice *virtio_block_init(VIRTIOBusDef *bus, BlockDevice *bs)
+VIRTIODevice *virtio_block_init(VIRTIOBusDef bus, BlockDevice *bs)
 {
     VIRTIOBlockDevice *s = {0};
     uint64_t nb_sectors = {0};
@@ -938,18 +931,21 @@ static int virtio_net_recv_request(VIRTIODevice *s, int queue_idx,
                                    int desc_idx, int read_size,
                                    int write_size)
 {
+    if (queue_idx % 2 != 1) {
+        return 0;
+    }
     VIRTIONetDevice *s1 = (VIRTIONetDevice *)s;
     EthernetDevice *es = s1->es;
     VIRTIONetHeader h = {0};
     uint8_t *buf = {0};
     int len = {0};
-
     if (memcpy_from_queue(s, &h, queue_idx, desc_idx, 0, s1->header_size) < 0)
         return 0;
     len = read_size - s1->header_size;
     buf = malloc(len);
     memset(buf, 0, len);
     memcpy_from_queue(s, buf, queue_idx, desc_idx, s1->header_size, len);
+    DEBUG("tx packet, queue idx： %d, len: %d\n", queue_idx, len);
     es->write_packet_to_ether(es, buf, len);
     free(buf);
     virtio_consume_desc(s, queue_idx, desc_idx, 0);
@@ -1009,7 +1005,7 @@ end:
     pthread_mutex_unlock(&s->lock);
 }
 
-VIRTIODevice *virtio_net_init(VIRTIOBusDef *bus, EthernetDevice *es)
+VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, EthernetDevice *es)
 {
     VIRTIONetDevice *s = NULL;
 

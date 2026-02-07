@@ -14,6 +14,7 @@
 #include <asm/bootparam.h>
 
 #include "blkdev.h"
+#include "netdev.h"
 #include "config.h"
 #include "virtio.h"
 
@@ -149,6 +150,10 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk) {
             fprintf(stderr, "mvvm init error, failed to load disk.\n");
             return -1;
         }
+    }
+    if (mvvm_init_virtio_net(self, "vm0") < 0) {
+        fprintf(stderr, "mvvm init error, failed to load disk.\n");
+        return -1;
     }
     return 0;
 }
@@ -315,6 +320,7 @@ mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
             ret = -1; goto end;
         }
     }
+    cmdline_buf = cmdline_concat(cmdline_buf, VIRTIO_NET_CMDLINE);
     if (strnlen(cmdline_buf, 2000) >= 2000) {
         fprintf(stderr, "invalid kernel args.\n");
         free(cmdline_buf);
@@ -377,19 +383,22 @@ int mvvm_run(struct mvvm *vm) {
             if (run->mmio.phys_addr >> 30 == 1024) {
                 virtiodev = vm->blk;
                 mmio_base_addr = VIRTIO_BLK_MMIO_ADDR;
-            } else { // TODO: net device
+            } else if (run->mmio.phys_addr >> 30 == 1025) {
+                virtiodev = vm->net;
+                mmio_base_addr = VIRTIO_NET_MMIO_ADDR;
+            } else {
                 break;
             }
+            uint32_t offset = run->mmio.phys_addr - mmio_base_addr;
+            if (offset > 4096) break;
             if (run->mmio.is_write) {
-                // fprintf(stderr, "mmio write, addr: 0x%x, data: 0x%x\n", (int)(run->mmio.phys_addr - mmio_base_addr), *(uint32_t*)(run->mmio.data));
-                virtio_mmio_write(virtiodev,
-                    run->mmio.phys_addr - mmio_base_addr,
+                DEBUG("mmio write, addr: 0x%x, data: 0x%x\n", (int)(run->mmio.phys_addr - mmio_base_addr), *(uint32_t*)(run->mmio.data));
+                virtio_mmio_write(virtiodev, offset,
                     *(uint32_t*)(run->mmio.data), run->mmio.len);
             } else {
-                uint32_t val = virtio_mmio_read(virtiodev, 
-                    run->mmio.phys_addr - mmio_base_addr, 
+                uint32_t val = virtio_mmio_read(virtiodev, offset, 
                     run->mmio.len);
-                // fprintf(stderr, "mmio read, addr: 0x%x, data: 0x%x\n", (int)(run->mmio.phys_addr - mmio_base_addr), val);
+                DEBUG("mmio read, addr: 0x%x, data: 0x%x\n", (int)(run->mmio.phys_addr - mmio_base_addr), val);
                 *(uint32_t*)(run->mmio.data) = val;
             }
             break;

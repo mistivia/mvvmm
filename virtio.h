@@ -43,7 +43,6 @@ typedef struct {
 
 typedef struct VIRTIODevice VIRTIODevice; 
 
-void virtio_config_change_notify(VIRTIODevice *s);
 uint32_t virtio_mmio_read(VIRTIODevice *s, uint32_t offset1, int size);
 void virtio_mmio_write(VIRTIODevice *s, uint32_t offset,
                        uint32_t val, int size);
@@ -85,7 +84,7 @@ struct BlockDevice {
     void *opaque;
 };
 
-VIRTIODevice *virtio_block_init(VIRTIOBusDef *bus, BlockDevice *bs);
+VIRTIODevice *virtio_block_init(VIRTIOBusDef bus, BlockDevice *bs);
 
 /* network device */
 struct EthernetDevice;
@@ -104,6 +103,6 @@ struct EthernetDevice {
 
 };
 
-VIRTIODevice *virtio_net_init(VIRTIOBusDef *bus, EthernetDevice *es);
+VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, EthernetDevice *es);
 
 #endif /* VIRTIO_H */

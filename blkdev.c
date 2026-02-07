@@ -189,7 +189,7 @@ mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     bus.mem_map = self->mem_map;
     bus.irq = irq;
     // Initialize virtio block device
-    self->blk = virtio_block_init(&bus, bs);
+    self->blk = virtio_block_init(bus, bs);
     if (!self->blk) {
         fprintf(stderr, "failed to initialize virtio block device\n");
         goto fail;

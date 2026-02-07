@@ -56,7 +56,6 @@ new_thread_pool(int thread_num)
 int
 thread_pool_run(struct thread_pool *self, void* (*task_fn)(void*), void *arg)
 {
-    int ret = -1;
     pthread_mutex_lock(&self->lock);
     for (int i = 0; i < self->worker_num; i++) {
         if (!self->is_working[i]) {

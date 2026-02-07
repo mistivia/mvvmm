@@ -24,6 +24,7 @@ struct mvvm {
     struct guest_mem_map *mem_map;
     struct serial serial;
     VIRTIODevice *blk;
+    VIRTIODevice *net;
 };
 
 int mvvm_init(struct mvvm *vm, uint64_t mem_size, const char *disk);
