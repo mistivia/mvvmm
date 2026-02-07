@@ -161,7 +161,7 @@ mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     }
     ctx->size = st.st_size;
     // Create thread pool for async I/O operations
-    ctx->pool = new_thread_pool(16);
+    ctx->pool = new_thread_pool(VIRTIO_BLK_MAX_QUEUE_NUM);
     if (!ctx->pool) {
         fprintf(stderr, "failed to create thread pool\n");
         goto fail;

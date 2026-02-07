@@ -71,7 +71,6 @@
 
 #define MAX_QUEUE 8
 #define MAX_CONFIG_SPACE_SIZE 256
-#define MAX_QUEUE_NUM 32
 
 typedef struct {
     uint32_t ready; /* 0 or 1 */
@@ -126,6 +125,7 @@ struct VIRTIODevice {
     uint32_t config_space_size; /* in bytes, must be multiple of 4 */
     uint8_t config_space[MAX_CONFIG_SPACE_SIZE];
     pthread_mutex_t lock;
+    int max_queue_num;
 };
 
 
@@ -188,7 +188,7 @@ static void virtio_reset(VIRTIODevice *s)
         qs->used_addr = 0;
         qs->last_avail_idx = 0;
         qs->ready = 0;
-        qs->num = MAX_QUEUE_NUM;
+        qs->num = s->max_queue_num;
     }
 }
 
@@ -206,7 +206,7 @@ static uint8_t* guest_addr_to_host_addr(VIRTIODevice *s, uint64_t guest_addr) {
 
 static void virtio_init(VIRTIODevice *s, VIRTIOBusDef bus,
                         uint32_t device_id, int config_space_size,
-                        VIRTIODeviceRecvFunc *device_recv)
+                        VIRTIODeviceRecvFunc *device_recv, int max_queue_num)
 {
     memset(s, 0, sizeof(*s));
 
@@ -218,6 +218,7 @@ static void virtio_init(VIRTIODevice *s, VIRTIOBusDef bus,
     s->vendor_id = 0xffff;
     s->config_space_size = config_space_size;
     s->device_recv = device_recv;
+    s->max_queue_num = max_queue_num;
     pthread_mutex_init(&s->lock, NULL);
     virtio_reset(s);
 }
@@ -619,7 +620,7 @@ uint32_t virtio_mmio_read(VIRTIODevice *s, uint32_t offset, int size)
             val = s->queue_sel;
             break;
         case VIRTIO_MMIO_QUEUE_NUM_MAX:
-            val = MAX_QUEUE_NUM;
+            val = s->max_queue_num;
             break;
         case VIRTIO_MMIO_QUEUE_NUM:
             val = s->queue[s->queue_sel].num;
@@ -900,7 +901,7 @@ VIRTIODevice *virtio_block_init(VIRTIOBusDef bus, BlockDevice *bs)
     s = malloc(sizeof(*s));
     *s = (VIRTIOBlockDevice){0};
     virtio_init(&s->common, bus,
-                2, 8, virtio_block_recv_request);
+                2, 8, virtio_block_recv_request, VIRTIO_BLK_MAX_QUEUE_NUM);
     s->bs = bs;
     
     nb_sectors = bs->get_sector_count(bs);
@@ -1013,7 +1014,7 @@ VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, EthernetDevice *es)
     s = malloc(sizeof(*s));
     *s = (VIRTIONetDevice){0};
     virtio_init(&s->common, bus,
-                1, 6 + 2, virtio_net_recv_request);
+                1, 6 + 2, virtio_net_recv_request, VIRTIO_NET_MAX_QUEUE_NUM);
     /* VIRTIO_NET_F_MAC, VIRTIO_NET_F_STATUS */
     s->common.device_features = (1 << 5) /* | (1 << 16) */;
     s->common.queue[0].manual_recv = true;
