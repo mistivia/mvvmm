@@ -37,6 +37,7 @@ Build Linux kernel:
 
     make -j4
     cp arch/x86/boot/bzImage ../
+    cd ..
 
 Setup a TAP device and enable NAT:
 
@@ -86,6 +87,7 @@ Create initrd:
     cd initramfs
     chmod +x init
     find . -print0 | cpio --null -ov --format=newc | gzip > ../initrd
+    cd ..
 
 Download Alpine Linux minirootfs:
 
@@ -96,13 +98,17 @@ Create a disk image with hole, and mount it:
     dd if=/dev/zero of=disk.img bs=1 count=0 seek=15G
     mkfs.ext4 disk.img
     mkdir mnt
-
-Chroot into minirootfs and do some setup:
-
     sudo mount disk.img ./mnt
+
+Install Alpine Linux, chroot into minirootfs and do some setup:
+
+    cd mnt
+    tar -xf ../alpine-minirootfs-3.23.3-x86_64.tar.gz
+    cd ..
+    sudo chroot ./mnt
     export PATH=/bin:/sbin:$PATH
-    echo 'nameserver 8.8.8.8' > /etc/resolv.conf
     passwd
+    echo 'nameserver 8.8.8.8' > ./etc/resolv.conf
     apk add openrc fastfetch alpine-config
 
 Edit `/etc/inittab` to enable getty on seiral port:
@@ -125,6 +131,12 @@ Login and run `fastfetch`:
 Finish remaining setup:
 
     setup-alpine
+
+When everything down, halt the virtual machine:
+
+    halt
+
+And press Ctrl+A Ctrl+C to quit.
 
 ## Screenshot
 
