@@ -48,8 +48,6 @@ void* keyboard_thread_func(void* arg) {
             escaped = 0;
             if (ch == 0x03) {
                 kill(getpid(), SIGINT);
-                // vm->quit = true;
-                // break;
             } else if (ch == 0x01) {
                 write_to_serial(vm, (char)0x01);
             } else {

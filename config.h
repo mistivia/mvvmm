@@ -16,9 +16,7 @@
 #define SECTOR_SIZE 512
 #define TAP_BUF_SIZE 4096
 
-#define MVVMM_DEBUG 1
-
-#if MVVMM_DEBUG != 0
+#ifdef MVVMM_DEBUG
 #define DEBUG(...) do { \
     if (MVVMM_DEBUG) { \
         fprintf(stderr, __VA_ARGS__); \
