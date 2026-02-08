@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <stdio.h>
+#include <errno.h>
 #include <stdint.h>
 
 #include <linux/kvm.h>
@@ -82,7 +83,13 @@ void write_to_serial(struct mvvm *vm, char c) {
     struct serial *serial = &vm->serial;
     pthread_mutex_lock(&serial->rx_lock);
     while (!is_rx_empty(serial)) {
-        pthread_cond_wait(&serial->rx_cond, &serial->rx_lock);
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_sec += 3;
+        int ret = pthread_cond_timedwait(&serial->rx_cond, &serial->rx_lock, &ts);
+        if (ret == ETIMEDOUT) {
+            goto end;
+        }
     }
     serial->regs[0] = c;
     if (is_rx_intr_enabled(serial)) {
@@ -90,6 +97,7 @@ void write_to_serial(struct mvvm *vm, char c) {
         trigger_serial_intr(vm);
     }
     set_data_ready(serial);
+end:
     pthread_mutex_unlock(&serial->rx_lock);
 }
 

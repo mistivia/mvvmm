@@ -79,7 +79,7 @@ static int init_cpu(int kvm_fd, int cpu_fd) {
 int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char *network) {
     struct kvm_pit_config pit = {0};
     struct kvm_userspace_memory_region mem = {0};
-    
+    self->quit = 0;
     // Open KVM device
     self->kvm_fd = open("/dev/kvm", O_RDWR | O_CLOEXEC);
     if (self->kvm_fd < 0) {
@@ -386,6 +386,7 @@ int mvvm_run(struct mvvm *vm) {
             break;
         case KVM_EXIT_SHUTDOWN:
             printf("KVM_EXIT_SHUTDOWN\n");
+            vm->quit = true;
             goto exit_loop;
         case KVM_EXIT_MMIO:
             if (run->mmio.phys_addr >> 30 == 1024) {

@@ -25,6 +25,7 @@ struct mvvm {
     struct serial serial;
     VIRTIODevice *blk;
     VIRTIODevice *net;
+    int quit;
 };
 
 int mvvm_init(struct mvvm *vm, uint64_t mem_size, const char *disk, const char *network);

@@ -9,6 +9,7 @@ struct thread_pool {
     bool *is_working;
     int worker_num;
     pthread_mutex_t lock;
+    int quit;
 };
 
 struct worker_thread {
@@ -26,5 +27,7 @@ struct thread_pool* new_thread_pool(int thread_num);
 
 int
 thread_pool_run(struct thread_pool *self, void* (*task_fn)(void*), void *arg);
+
+void thread_pool_destroy(struct thread_pool *self);
 
 #endif
