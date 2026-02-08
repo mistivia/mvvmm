@@ -128,7 +128,7 @@ Finish remaining setup:
 
 ## Screenshot
 
-<img height="300px" alt="image" src="https://github.com/user-attachments/assets/45422e2c-f639-4508-89f8-4c7a92c28d95" />
+<img width="811" height="714" alt="image" src="https://github.com/user-attachments/assets/92bc0333-1d8b-461b-aba3-5871be9746d7" />
 
 ## License
 
