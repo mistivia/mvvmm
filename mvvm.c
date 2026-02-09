@@ -1,5 +1,7 @@
 #include "mvvm.h"
 
+#include <errno.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -374,7 +376,22 @@ static int handle_power(struct mvvm *vm, struct kvm_run *run) {
     return 0;
 }
 
+static void mask_sigterm() {
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGTERM);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+}
+
+static void unmask_sigterm() {
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGTERM);
+    pthread_sigmask(SIG_UNBLOCK, &set, NULL);
+}
+
 int mvvm_run(struct mvvm *vm) {
+    mask_sigterm();
     int ret = 0;
     int mmap_size = 0;
     struct kvm_run *run = NULL;
@@ -394,10 +411,13 @@ int mvvm_run(struct mvvm *vm) {
         exit(-1);
     }
     while (1) {
+        unmask_sigterm();
         if (ioctl(vm->cpu_fd, KVM_RUN, 0) < 0) {
+            if (errno == EINTR) continue;
             perror("KVM_RUN");
             break;
         }
+        mask_sigterm();
         switch (run->exit_reason) {
         case KVM_EXIT_IO:
             if (run->io.port >= 0x3f8 && run->io.port <= 0x3ff) {
@@ -446,4 +466,14 @@ int mvvm_run(struct mvvm *vm) {
 exit_loop:
     munmap(run, mmap_size);
     return ret;
+}
+
+void mvvm_shutdown(struct mvvm *vm) {
+    vm->power_cmd = 1;
+    struct kvm_irq_level irq = {0};
+    irq.irq = 5;
+    irq.level = 1;
+    ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq);
+    irq.level = 0;
+    ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq);
 }

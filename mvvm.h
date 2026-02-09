@@ -38,6 +38,5 @@ void mvvm_destroy(struct mvvm *self);
 
 // must use with mvvmm guest module
 void mvvm_shutdown(struct mvvm *vm);
-void mvvm_reboot(struct mvvm *vm);
 
 #endif

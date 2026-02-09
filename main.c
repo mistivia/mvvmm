@@ -14,6 +14,8 @@
 #include "mvvm.h"
 #include "serial.h"
 
+struct mvvm *g_vm = NULL;
+
 struct termios orig_termios;
 int g_term_changed = 0;
 
@@ -103,6 +105,12 @@ void sigint_handler(int sig) {
         reset_terminal_mode();
     }
     _exit(128 + SIGINT);
+}
+
+void sigterm_handler(int sig) {
+    (void)sig;
+    fprintf(stderr, "123\n");
+    mvvm_shutdown(g_vm);
 }
 
 struct cmd_opts {
@@ -302,6 +310,8 @@ int main(int argc, char *argv[]) {
         perror("Failed to create thread");
         return 1;
     }
+    g_vm = &vm;
+    signal(SIGTERM, sigterm_handler);
     mvvm_run(&vm);
     vm.quit = true;
     pthread_join(keyboard_thread, NULL);
