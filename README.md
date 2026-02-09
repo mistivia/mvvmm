@@ -68,6 +68,8 @@ Create a `init` script:
     mount -t devtmpfs devtmpfs /dev
     mount -t proc proc /proc
     mount -t sysfs sys /sys
+    mkdir -p /dev/pts
+    mount -t devpts devpts /dev/pts
     mdev -s
 
     mkdir /sysroot
@@ -109,9 +111,9 @@ Install Alpine Linux, chroot into minirootfs and do some setup:
     export PATH=/bin:/sbin:$PATH
     passwd
     echo 'nameserver 8.8.8.8' > ./etc/resolv.conf
-    apk add openrc fastfetch alpine-config
+    apk add openrc fastfetch
 
-Edit `/etc/inittab` to enable getty on seiral port:
+Edit `/etc/inittab` and uncomment this line to enable getty on seiral port:
 
     ttyS0::respawn:/sbin/getty -L 115200 ttyS0 vt100
 
@@ -128,15 +130,19 @@ Login and run `fastfetch`:
 
     fastfetch
 
-Finish remaining setup:
+When everything is done, shutdown the virtual machine:
 
-    setup-alpine
-
-When everything down, halt the virtual machine:
-
-    halt
+    poweroff
 
 And press Ctrl+A Ctrl+C to quit.
+
+You can also set up a `sshd` and disable serial port. With keyboard, mouse, and serial ports disabled, Alpine Linux can boot in 300 ms.
+
+## Power Management
+
+`mvvmm` don't have ACPI. I wrote a small Linux kernel module to handle poweroff. See `guest-module`.
+
+There is no reboot. Just restart the virtual machine process if you want a reboot.
 
 ## Screenshot
 

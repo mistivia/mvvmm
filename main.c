@@ -109,7 +109,6 @@ void sigint_handler(int sig) {
 
 void sigterm_handler(int sig) {
     (void)sig;
-    fprintf(stderr, "123\n");
     mvvm_shutdown(g_vm);
 }
 

@@ -6,6 +6,7 @@
 #include <linux/reboot.h>
 #include <linux/workqueue.h>
 #include <linux/ioport.h>
+#include <linux/pm.h>
 #include <linux/limits.h>
 #include <linux/reboot.h>
 
@@ -23,28 +24,17 @@ MODULE_VERSION("2.0");
 static int pending_command = 0;
 static struct work_struct power_work;
 
-static int mvvmm_reboot_notify(struct notifier_block *nb, unsigned long action, void *data)
+static void mvvmm_poweroff(void)
 {
-    switch (action) {
-    case SYS_HALT:
-    case SYS_POWER_OFF:
-    case SYS_RESTART:
-        printk(KERN_EMERG "MVVMM: Sending HALT signal...\n");
-        outb(CMD_HALT, PORT);
-        break;
-    }
-    return NOTIFY_DONE;
+    outb(CMD_HALT, PORT);
+    while (1) ;
 }
 
-static struct notifier_block mvvmm_notifier = {
-    .notifier_call = mvvmm_reboot_notify,
-    .priority = INT_MIN, 
-};
 
 static void power_work_func(struct work_struct *work)
 {
     switch (pending_command) {
-    case CMD_HALT:
+case CMD_HALT:
         printk(KERN_INFO "MVVMM: IRQ Halt received. Scheduling orderly poweroff.\n");
         orderly_poweroff(true);
         break;
@@ -77,20 +67,16 @@ static int __init mvvmm_init(void)
         printk(KERN_ERR "MVVMM: Failed to request region 0x%x\n", PORT);
         return -EBUSY;
     }
-
-    ret = register_reboot_notifier(&mvvmm_notifier);
-    if (ret) {
-        printk(KERN_ERR "MVVMM: Failed to register reboot notifier\n");
-        release_region(PORT, 1);
-        return ret;
+    if (pm_power_off) {
+        printk(KERN_WARNING "Overriding existing power_off handler\n");
     }
+    pm_power_off = mvvmm_poweroff;
 
     INIT_WORK(&power_work, power_work_func);
 
     ret = request_irq(IRQ, my_irq_handler, IRQF_SHARED, DRIVER_NAME, (void *)(my_irq_handler));
     if (ret) {
         printk(KERN_ERR "MVVMM: Failed to request IRQ %d\n", IRQ);
-        unregister_reboot_notifier(&mvvmm_notifier);
         release_region(PORT, 1);
         return ret;
     }
@@ -101,8 +87,10 @@ static int __init mvvmm_init(void)
 
 static void __exit mvvmm_exit(void)
 {
+    if (pm_power_off == mvvmm_poweroff) {
+        pm_power_off = NULL;
+    }
     free_irq(IRQ, (void *)(my_irq_handler));
-    unregister_reboot_notifier(&mvvmm_notifier);
     cancel_work_sync(&power_work);
     release_region(PORT, 1);
     printk(KERN_INFO "MVVMM: Module unloaded.\n");
