@@ -354,6 +354,21 @@ end:
     return ret;
 }
 
+static int handle_power(struct mvvm *vm, struct kvm_run *run) {
+    uint8_t *io_data = (uint8_t *)run + run->io.data_offset;
+    if (run->io.direction == KVM_EXIT_IO_IN) {
+        *io_data = vm->power_cmd;
+        return 0;
+    }
+    if (run->io.direction == KVM_EXIT_IO_OUT) {
+        if (*io_data == 1 || *io_data == 2) {
+            return *io_data;
+        }
+        return 0;
+    }
+    return 0;
+}
+
 int mvvm_run(struct mvvm *vm) {
     int ret = 0;
     int mmap_size = 0;
@@ -382,6 +397,12 @@ int mvvm_run(struct mvvm *vm) {
         case KVM_EXIT_IO:
             if (run->io.port >= 0x3f8 && run->io.port <= 0x3ff) {
                 handle_serial(vm, run);
+            }
+            if (run->io.port == 0x300) {
+                ret = handle_power(vm, run);
+                if (ret != 0) {
+                    goto exit_loop;
+                }
             }
             break;
         case KVM_EXIT_SHUTDOWN:

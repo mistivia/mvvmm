@@ -5,3 +5,11 @@ mvvmm
 tmp.md
 *.img
 *.err
+linux-*/
+*.ko
+*.cmd
+*.mod.c
+*.mod
+Module.symvers
+modules.order
+initramfs/

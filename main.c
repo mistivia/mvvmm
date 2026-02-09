@@ -270,9 +270,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     int ret = -1;
-    if ((ret = mvvm_run(&vm)) != 0) {
-        fprintf(stderr, "mvvm exit code: %d\n", ret);
-        return ret;
+    ret = mvvm_run(&vm);
+    if (ret == 1) {
+        vm.quit = true;
     }
     pthread_join(keyboard_thread, NULL);
     mvvm_destroy(&vm);

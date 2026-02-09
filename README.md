@@ -36,7 +36,7 @@ Press `/` and search for the following configs, set them to `y`:
 Build Linux kernel:
 
     make -j4
-    cp arch/x86/boot/bzImage ../
+    cp arch/x86/boot/bzImage ../vmlinuz
     cd ..
 
 Setup a TAP device and enable NAT:
