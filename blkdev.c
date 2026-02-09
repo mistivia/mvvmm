@@ -42,6 +42,7 @@ block_io_worker_fn(void *arg)
     // Perform actual I/O using pread/pwrite for thread safety
     if (req->is_write) {
         n = pwrite(req->fd, req->buf, req->count, req->offset);
+        free(req->buf);
     } else {
         n = pread(req->fd, req->buf, req->count, req->offset);
     }
@@ -137,12 +138,12 @@ mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
 {
     struct block_device_ctx *ctx = NULL;
     BlockDevice *bs = NULL;
-    struct IRQSignal *irq = NULL;
+    struct IRQSignal irq = {0};
     struct stat st = {0};
     VIRTIOBusDef bus = {0};
     int ret = -1;
     // Allocate block device context
-    ctx = calloc(1, sizeof(*ctx));
+    ctx = malloc(sizeof(*ctx));
     if (!ctx) {
         fprintf(stderr, "failed to allocate block device context\n");
         return -1;
@@ -166,7 +167,7 @@ mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
         goto fail;
     }
     // Allocate and initialize BlockDevice structure
-    bs = calloc(1, sizeof(*bs));
+    bs = malloc(sizeof(*bs));
     if (!bs) {
         fprintf(stderr, "failed to allocate BlockDevice structure\n");
         goto fail;
@@ -176,14 +177,9 @@ mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     bs->read_async = block_read_async;
     bs->write_async = block_write_async;
     bs->opaque = ctx;
-    // Allocate IRQ signal structure
-    irq = malloc(sizeof(*irq));
-    if (!irq) {
-        fprintf(stderr, "failed to allocate IRQSignal\n");
-        goto fail;
-    }
-    irq->vmfd = self->vm_fd;
-    irq->irqline = VIRTIO_BLK_IRQ;
+
+    irq.vmfd = self->vm_fd;
+    irq.irqline = VIRTIO_BLK_IRQ;
     // Setup virtio bus definition
     bus.mem_map = self->mem_map;
     bus.irq = irq;
@@ -198,9 +194,6 @@ mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     return 0;
 
 fail:
-    if (irq) {
-        free(irq);
-    }
     if (bs) {
         free(bs);
     }
@@ -216,4 +209,7 @@ fail:
 void mvvm_destroy_virtio_blk(struct mvvm *self) {
     struct block_device_ctx *ctx = virtio_block_get_opaque(self->blk);
     delete_thread_pool(ctx->pool);
+    free(ctx);
+    virtio_block_destroy(self->blk);
+    free(self->blk);
 }

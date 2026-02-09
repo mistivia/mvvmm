@@ -172,6 +172,7 @@ void mvvm_destroy(struct mvvm *self) {
     close(self->kvm_fd);
     mvvm_destroy_virtio_blk(self);
     mvvm_destroy_virtio_net(self);
+    free(self->mem_map);
 }
 
 static int

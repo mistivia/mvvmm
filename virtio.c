@@ -105,7 +105,7 @@ typedef uint8_t *VIRTIOGetRAMPtrFunc(VIRTIODevice *s, virtio_phys_addr_t paddr);
 struct VIRTIODevice {
     struct guest_mem_map *mem_map;
     /* MMIO only */
-    IRQSignal *irq;
+    IRQSignal irq;
     VIRTIOGetRAMPtrFunc *get_ram_ptr;
     int debug;
 
@@ -418,11 +418,11 @@ static int memcpy_to_queue(VIRTIODevice *s,
                                 count, true);
 }
 
-static void set_irq(IRQSignal *irqsig, int level) {
+static void set_irq(IRQSignal irqsig, int level) {
     struct kvm_irq_level irq = {0};
-    irq.irq = irqsig->irqline;
+    irq.irq = irqsig.irqline;
     irq.level = level;
-    ioctl(irqsig->vmfd, KVM_IRQ_LINE, &irq);
+    ioctl(irqsig.vmfd, KVM_IRQ_LINE, &irq);
 }
 
 /* signal that the descriptor has been consumed */
@@ -911,6 +911,11 @@ VIRTIODevice *virtio_block_init(VIRTIOBusDef bus, BlockDevice *bs)
     return (VIRTIODevice *)s;
 }
 
+void virtio_block_destroy(VIRTIODevice *s) {
+    VIRTIOBlockDevice *bs = (void*)s;
+    free(bs->bs);
+}
+
 void* virtio_block_get_opaque(VIRTIODevice *s) {
     VIRTIOBlockDevice *bs = (void*)s;
     return bs->bs->opaque;
@@ -1035,6 +1040,11 @@ VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, EthernetDevice *es)
     es->can_write_packet_to_virtio = virtio_net_can_write_packet;
     es->write_packet_to_virtio = virtio_net_write_packet;
     return (VIRTIODevice *)s;
+}
+
+void virtio_net_destroy(VIRTIODevice *s) {
+    VIRTIONetDevice *es = (void*)s;
+    free(es->es);
 }
 
 void* virtio_net_get_opaque(VIRTIODevice *s) {

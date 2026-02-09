@@ -100,13 +100,13 @@ mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
 {
     struct tap_net_ctx *ctx = NULL;
     EthernetDevice *net = NULL;
-    struct IRQSignal *irq = NULL;
+    struct IRQSignal irq = {0};
     VIRTIOBusDef bus = {0};
     struct ifreq ifr = {0};
     int ret = -1;
 
     // Allocate TAP device context
-    ctx = calloc(1, sizeof(*ctx));
+    ctx = malloc(sizeof(*ctx));
     if (!ctx) {
         fprintf(stderr, "failed to allocate TAP network context\n");
         return -1;
@@ -137,7 +137,7 @@ mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
     ctx->ifname[IFNAMSIZ - 1] = '\0';
 
     // Allocate and initialize EthernetDevice structure
-    net = calloc(1, sizeof(*net));
+    net = malloc(sizeof(*net));
     if (!net) {
         fprintf(stderr, "failed to allocate EthernetDevice structure\n");
         goto fail;
@@ -155,14 +155,8 @@ mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
     net->write_packet_to_ether = write_packet_to_ether;
     net->opaque = ctx;
 
-    // Allocate IRQ signal for device interrupts
-    irq = malloc(sizeof(*irq));
-    if (!irq) {
-        fprintf(stderr, "failed to allocate IRQSignal\n");
-        goto fail;
-    }
-    irq->vmfd = self->vm_fd;
-    irq->irqline = VIRTIO_NET_IRQ;
+    irq.vmfd = self->vm_fd;
+    irq.irqline = VIRTIO_NET_IRQ;
 
     // Setup virtio bus definition
     bus.mem_map = self->mem_map;
@@ -184,9 +178,6 @@ mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
     return 0;
 
 fail:
-    if (irq) {
-        free(irq);
-    }
     if (net) {
         free(net);
     }
@@ -206,4 +197,7 @@ void mvvm_destroy_virtio_net(struct mvvm *self) {
     pthread_mutex_unlock(&ctx->lock);
     void *ret = NULL;
     pthread_join(ctx->rx_thread, &ret);
+    free(ctx);
+    virtio_net_destroy(self->net);
+    free(self->net);
 }

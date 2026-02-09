@@ -94,6 +94,7 @@ void delete_thread_pool(struct thread_pool* pool) {
     for (int i = 0; i < pool->worker_num; i++) {
         void *ret;
         pthread_join(pool->workers[i]->th, &ret);
+        free(pool->workers[i]);
     }
     free(pool->workers);
     free(pool->is_working);

@@ -38,7 +38,7 @@ typedef struct IRQSignal IRQSignal;
 
 typedef struct {
     struct guest_mem_map *mem_map;
-    IRQSignal *irq;
+    IRQSignal irq;
 } VIRTIOBusDef;
 
 typedef struct VIRTIODevice VIRTIODevice; 
@@ -86,6 +86,7 @@ struct BlockDevice {
 
 VIRTIODevice *virtio_block_init(VIRTIOBusDef bus, BlockDevice *bs);
 
+void virtio_block_destroy(VIRTIODevice *s);
 void* virtio_block_get_opaque(VIRTIODevice *s);
 
 /* network device */
@@ -107,6 +108,7 @@ struct EthernetDevice {
 
 VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, EthernetDevice *es);
 
+void virtio_net_destroy(VIRTIODevice *s);
 void* virtio_net_get_opaque(VIRTIODevice *s);
 
 #endif /* VIRTIO_H */
