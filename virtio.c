@@ -911,6 +911,11 @@ VIRTIODevice *virtio_block_init(VIRTIOBusDef bus, BlockDevice *bs)
     return (VIRTIODevice *)s;
 }
 
+void* virtio_block_get_opaque(VIRTIODevice *s) {
+    VIRTIOBlockDevice *bs = (void*)s;
+    return bs->bs->opaque;
+}
+
 /*********************************************************************/
 /* network device */
 
@@ -1030,4 +1035,9 @@ VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, EthernetDevice *es)
     es->can_write_packet_to_virtio = virtio_net_can_write_packet;
     es->write_packet_to_virtio = virtio_net_write_packet;
     return (VIRTIODevice *)s;
+}
+
+void* virtio_net_get_opaque(VIRTIODevice *s) {
+    VIRTIONetDevice *es = (void*)s;
+    return es->es->opaque;
 }

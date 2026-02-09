@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>
+#include <poll.h>
 
 #include <termios.h>
 
@@ -37,13 +38,44 @@ void set_terminal_raw_mode() {
     g_term_changed = 1;
 }
 
+static int timed_getchar(int fd, int timeout_ms, int *ch) {
+    struct pollfd pfd;
+    int ret;
+    unsigned char c;
+
+    pfd.fd = fd;
+    pfd.events = POLLIN;
+
+    ret = poll(&pfd, 1, timeout_ms);
+
+    if (ret > 0) {
+        if (pfd.revents & POLLIN) {
+            ssize_t n = read(fd, &c, 1);
+            if (n > 0) {
+                *ch = (int)c;
+                return 1;
+            }
+        }
+        return 0;
+    } else if (ret == 0) {
+        return 0;
+    } else {
+        return 0; 
+    }
+}
+
 void* keyboard_thread_func(void* arg) {
     fprintf(stderr, "Press Ctrl+A & Ctrl+C to exit...\n");
     struct mvvm *vm = arg;
     set_terminal_raw_mode();
     int ch = 0;
     int escaped = 0;
-    while ((ch = getchar()) != EOF) {
+    int ret = 0;
+    while (1) {
+        ret = timed_getchar(STDIN_FILENO, 300, &ch);
+        if (vm->quit) break;
+        if (ch == EOF) break;
+        if (ret == 0) continue;
         if (escaped) {
             escaped = 0;
             if (ch == 0x03) {
@@ -78,7 +110,7 @@ struct cmd_opts {
     const char *initrd_path; // can be null
     const char *disk_path; // can be null
     uint64_t memory_size; // default 1GB
-    const char *kernel_cmdline; // default "console=ttyS0 debug"
+    const char *kernel_cmdline;
     const char *tap_ifname;
 };
 
@@ -258,6 +290,7 @@ int main(int argc, char *argv[]) {
     struct mvvm vm = {0};
     struct cmd_opts opts = parse_opts(argc, argv);
     signal(SIGINT, sigint_handler);
+    vm = (struct mvvm){0};
     if (mvvm_init(&vm, opts.memory_size, opts.disk_path, opts.tap_ifname) < 0) {
         return -1;
     }
@@ -269,11 +302,8 @@ int main(int argc, char *argv[]) {
         perror("Failed to create thread");
         return 1;
     }
-    int ret = -1;
-    ret = mvvm_run(&vm);
-    if (ret == 1) {
-        vm.quit = true;
-    }
+    mvvm_run(&vm);
+    vm.quit = true;
     pthread_join(keyboard_thread, NULL);
     mvvm_destroy(&vm);
     return 0;

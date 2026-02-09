@@ -86,6 +86,8 @@ struct BlockDevice {
 
 VIRTIODevice *virtio_block_init(VIRTIOBusDef bus, BlockDevice *bs);
 
+void* virtio_block_get_opaque(VIRTIODevice *s);
+
 /* network device */
 struct EthernetDevice;
 typedef struct EthernetDevice EthernetDevice; 
@@ -104,5 +106,7 @@ struct EthernetDevice {
 };
 
 VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, EthernetDevice *es);
+
+void* virtio_net_get_opaque(VIRTIODevice *s);
 
 #endif /* VIRTIO_H */

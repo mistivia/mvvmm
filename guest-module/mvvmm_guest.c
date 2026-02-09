@@ -14,7 +14,6 @@
 #define DRIVER_NAME "mvvmm_guest"
 
 #define CMD_HALT     1
-#define CMD_REBOOT   2
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Mistivia");
@@ -27,14 +26,10 @@ static struct work_struct power_work;
 static int mvvmm_reboot_notify(struct notifier_block *nb, unsigned long action, void *data)
 {
     switch (action) {
-    case SYS_RESTART:
-        printk(KERN_EMERG "MVVMM: Sending REBOOT signal (0x%x <- %d)\n", PORT, CMD_REBOOT);
-        outb(CMD_REBOOT, PORT);
-        break;
-
     case SYS_HALT:
     case SYS_POWER_OFF:
-        printk(KERN_EMERG "MVVMM: Sending HALT signal (0x%x <- %d)\n", PORT, CMD_HALT);
+    case SYS_RESTART:
+        printk(KERN_EMERG "MVVMM: Sending HALT signal...\n");
         outb(CMD_HALT, PORT);
         break;
     }
@@ -53,11 +48,6 @@ static void power_work_func(struct work_struct *work)
         printk(KERN_INFO "MVVMM: IRQ Halt received. Scheduling orderly poweroff.\n");
         orderly_poweroff(true);
         break;
-
-    case CMD_REBOOT:
-        printk(KERN_INFO "MVVMM: IRQ Reboot received. Scheduling orderly reboot.\n");
-        orderly_reboot();
-        break;
         
     default:
         printk(KERN_WARNING "MVVMM: Unknown pending command %d\n", pending_command);
@@ -68,7 +58,7 @@ static irqreturn_t my_irq_handler(int irq, void *dev_id)
 {
     unsigned char val;
     val = inb(PORT);
-    if (val == CMD_HALT || val == CMD_REBOOT) {
+    if (val == CMD_HALT) {
         pending_command = val;
         schedule_work(&power_work);
         return IRQ_HANDLED;

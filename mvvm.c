@@ -16,6 +16,7 @@
 #include "blkdev.h"
 #include "netdev.h"
 #include "config.h"
+#include "serial.h"
 #include "virtio.h"
 
 static void set_flat_mode(struct kvm_segment *seg) {
@@ -25,7 +26,7 @@ static void set_flat_mode(struct kvm_segment *seg) {
     seg->db = 1;
 }
 
-static int init_cpu(int kvm_fd, int cpu_fd) {
+int init_cpu(int kvm_fd, int cpu_fd) {
     struct kvm_sregs sregs = {0};
     struct kvm_regs regs = {0};
     struct kvm_cpuid2 *cpuid = NULL;
@@ -161,11 +162,14 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char
 }
 
 void mvvm_destroy(struct mvvm *self) {
+    for (int i = 0; i < self->mem_map->size; i++) {
+        munmap(self->mem_map->entries[i].host_mem, self->mem_map->entries[i].size);
+    }
     close(self->cpu_fd);
-    // TODO:
-    // munmap(self->memory, self->memory_size);
     close(self->vm_fd);
     close(self->kvm_fd);
+    mvvm_destroy_virtio_blk(self);
+    mvvm_destroy_virtio_net(self);
 }
 
 static int
@@ -358,10 +362,11 @@ static int handle_power(struct mvvm *vm, struct kvm_run *run) {
     uint8_t *io_data = (uint8_t *)run + run->io.data_offset;
     if (run->io.direction == KVM_EXIT_IO_IN) {
         *io_data = vm->power_cmd;
+        vm->power_cmd = 0;
         return 0;
     }
     if (run->io.direction == KVM_EXIT_IO_OUT) {
-        if (*io_data == 1 || *io_data == 2) {
+        if (*io_data == 1) {
             return *io_data;
         }
         return 0;
@@ -407,7 +412,7 @@ int mvvm_run(struct mvvm *vm) {
             break;
         case KVM_EXIT_SHUTDOWN:
             printf("KVM_EXIT_SHUTDOWN\n");
-            vm->quit = true;
+            ret = 1;
             goto exit_loop;
         case KVM_EXIT_MMIO:
             if (run->mmio.phys_addr >> 30 == 1024) {
@@ -434,7 +439,7 @@ int mvvm_run(struct mvvm *vm) {
             break;
         default:
             printf("Unhandled exit reason: %d\n", run->exit_reason);
-            ret = -1;
+            ret = 1;
             goto exit_loop;
         }
     }

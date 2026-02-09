@@ -137,7 +137,6 @@ mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
 {
     struct block_device_ctx *ctx = NULL;
     BlockDevice *bs = NULL;
-    struct PhysMemoryMap *mem_map = NULL;
     struct IRQSignal *irq = NULL;
     struct stat st = {0};
     VIRTIOBusDef bus = {0};
@@ -202,9 +201,6 @@ fail:
     if (irq) {
         free(irq);
     }
-    if (mem_map) {
-        free(mem_map);
-    }
     if (bs) {
         free(bs);
     }
@@ -215,4 +211,9 @@ fail:
         free(ctx);
     }
     return ret;
+}
+
+void mvvm_destroy_virtio_blk(struct mvvm *self) {
+    struct block_device_ctx *ctx = virtio_block_get_opaque(self->blk);
+    delete_thread_pool(ctx->pool);
 }

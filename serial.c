@@ -155,3 +155,8 @@ void handle_serial(struct mvvm *vm, struct kvm_run *run) {
     }
     pthread_mutex_unlock(&serial->rx_lock);
 }
+
+void serial_destroy(struct serial *self) {
+    pthread_mutex_destroy(&self->rx_lock);
+    pthread_cond_destroy(&self->rx_cond);
+}

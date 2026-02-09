@@ -1,3 +1,5 @@
+#include <bits/types/struct_timeval.h>
+#include <pthread.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -16,6 +18,9 @@
 struct tap_net_ctx {
     int fd;
     char ifname[IFNAMSIZ];
+    pthread_t rx_thread;
+    int quit;
+    pthread_mutex_t lock;
 };
 
 static void
@@ -44,8 +49,15 @@ tap_net_rx_thread(void *arg)
     while (1) {
         FD_ZERO(&rfds);
         FD_SET(ctx->fd, &rfds);
-
-        ret = select(ctx->fd + 1, &rfds, NULL, NULL, NULL);
+        struct timeval timeout = {0, 3000};
+        ret = select(ctx->fd + 1, &rfds, NULL, NULL, &timeout);
+        struct tap_net_ctx *ctx = net->opaque;
+        pthread_mutex_lock(&ctx->lock);
+        if (ctx->quit) {
+            pthread_mutex_unlock(&ctx->lock);
+            return NULL;
+        }
+        pthread_mutex_unlock(&ctx->lock);
         if (ret < 0) {
             if (errno == EINTR) {
                 continue;
@@ -99,7 +111,8 @@ mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
         fprintf(stderr, "failed to allocate TAP network context\n");
         return -1;
     }
-
+    ctx->quit = 0;
+    pthread_mutex_init(&ctx->lock, NULL);
     // Open TUN/TAP clone device
     ctx->fd = open("/dev/net/tun", O_RDWR | O_NONBLOCK);
     if (ctx->fd < 0) {
@@ -167,9 +180,7 @@ mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
         fprintf(stderr, "failed to create TAP RX thread\n");
         goto fail;
     }
-    
-    // Detach thread to avoid resource leak on VM shutdown
-    pthread_detach(rx_thread);
+    ctx->rx_thread = rx_thread;
     return 0;
 
 fail:
@@ -186,4 +197,13 @@ fail:
         free(ctx);
     }
     return ret;
+}
+
+void mvvm_destroy_virtio_net(struct mvvm *self) {
+    struct tap_net_ctx *ctx = virtio_net_get_opaque(self->net);
+    pthread_mutex_lock(&ctx->lock);
+    ctx->quit = 1;
+    pthread_mutex_unlock(&ctx->lock);
+    void *ret = NULL;
+    pthread_join(ctx->rx_thread, &ret);
 }

@@ -16,5 +16,6 @@ struct mvvm;
 void serial_init(struct serial *self);
 void handle_serial(struct mvvm *vm, struct kvm_run *run);
 void write_to_serial(struct mvvm *vm, char c);
+void serial_destroy(struct serial *self);
 
 #endif
