@@ -2,11 +2,16 @@
 
 A small VMM on KVM with just enough features, not ready for production, but easy for hacking and tweaking.
 
+## Currentt Status
+
 - [x] Boot Linux
 - [x] virtio-blk
 - [x] virtio-net
+- [ ] Use ioeventfd and irqfd
+- [ ] VIRTIO_F_EVENT_IDX
+- [ ] Symmetric Multiprocessing (SMP) 
 
-# Guide
+## Guide
 
 Download `mvvmm`:
 
