@@ -13,3 +13,4 @@ linux-*/
 Module.symvers
 modules.order
 initramfs/
+ramdisk/
