@@ -7,7 +7,7 @@ A small VMM on KVM with just enough features, not ready for production, but easy
 - [x] Boot Linux
 - [x] Block device
 - [x] Network interface
-- [x] Properly handle SIGTERM
+- [x] Graceful shutdown
 - [x] Run Codex/Claude Code/OpenClaws/...
 - [ ] Better performance with `ioeventfd` and `irqfd`
 - [ ] Better performance with `VIRTIO_F_EVENT_IDX`
