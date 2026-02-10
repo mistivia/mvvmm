@@ -149,6 +149,8 @@ You can also set up a `sshd` and disable serial port. With keyboard, mouse, and 
 
 `mvvmm` don't have ACPI. I wrote a small Linux kernel module to handle poweroff. See `guest-module`.
 
+`guest-module` will also provide graceful shutdown with host received SIGTERM.
+
 There is no reboot. Just restart the virtual machine process if you want a reboot.
 
 ## Screenshot
