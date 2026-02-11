@@ -2,13 +2,13 @@
 
 A small VMM on KVM with just enough features, not ready for production, but easy for hacking and tweaking.
 
-## Currentt Status
+## Current Status
 
 - [x] Boot Linux
 - [x] Block device
 - [x] Network interface
 - [x] Graceful shutdown
-- [x] Run Codex/Claude Code/OpenClaws/...
+- [x] Run Codex/Claude Code/OpenClaw/...
 - [ ] Better performance with `ioeventfd` and `irqfd`
 - [ ] Better performance with `VIRTIO_F_EVENT_IDX`
 - [ ] Symmetric Multiprocessing (SMP) 
