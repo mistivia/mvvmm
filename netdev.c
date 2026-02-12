@@ -33,64 +33,75 @@ write_packet_to_ether(EthernetDevice *net, const uint8_t *buf, int len)
     write(ctx->fd, buf, len);
 }
 
+static ssize_t
+timed_read(int fd, void *buf, size_t len, int timeout_ms)
+{
+    struct pollfd pfd;
+    int ret;
+
+    pfd.fd = fd;
+    pfd.events = POLLIN;
+
+    ret = poll(&pfd, 1, timeout_ms);
+    if (ret < 0) {
+        return -1;
+    }
+    if (ret == 0) {
+        // Timeout
+        errno = ETIMEDOUT;
+        return -1;
+    }
+
+    if (pfd.revents & POLLIN) {
+        return read(fd, buf, len);
+    }
+
+    // Error or hangup
+    errno = EIO;
+    return -1;
+}
+
 static void *
 tap_net_rx_thread(void *arg)
 {
     EthernetDevice *net = arg;
     struct tap_net_ctx *ctx = net->opaque;
     uint8_t buf[TAP_BUF_SIZE];
-    struct pollfd pfd;
-    int ret;
 
     if (!ctx || ctx->fd < 0) {
         return NULL;
     }
 
-    pfd.fd = ctx->fd;
-    pfd.events = POLLIN;
-
     while (1) {
-        ret = poll(&pfd, 1, 300);
-        struct tap_net_ctx *ctx = net->opaque;
-        pthread_mutex_lock(&ctx->lock);
-        if (ctx->quit) {
-            pthread_mutex_unlock(&ctx->lock);
-            return NULL;
-        }
-        pthread_mutex_unlock(&ctx->lock);
-        if (ret < 0) {
-            if (errno == EINTR) {
+
+        ssize_t len = timed_read(ctx->fd, buf, sizeof(buf), 300);
+        if (len < 0) {
+            if (errno == EINTR || errno == ETIMEDOUT) {
+                pthread_mutex_lock(&ctx->lock);
+                if (ctx->quit) {
+                    pthread_mutex_unlock(&ctx->lock);
+                    return NULL;
+                }
+                pthread_mutex_unlock(&ctx->lock);
                 continue;
             }
-            perror("tap_net_rx_thread: poll failed");
+            perror("tap_net_rx_thread: timed_read failed");
             break;
         }
 
-        if (pfd.revents & POLLIN) {
-            while (1) {
-                ssize_t len = read(ctx->fd, buf, sizeof(buf));
-                if (len < 0) {
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        break;
-                    }
-                    perror("tap_net_rx_thread: read failed");
-                    goto end;
-                }
-                if (len == 0) {
-                    // TAP device closed
-                    goto end;
-                }
-
-                // Check if virtio net device can receive packet
-                if (net->can_write_packet_to_virtio &&
-                    net->can_write_packet_to_virtio(net)) {
-                    net->write_packet_to_virtio(net, buf, len);
-                }
-                // If virtio queue is full, packet is dropped
-            }
+        if (len == 0) {
+            // TAP device closed
+            break;
         }
+
+        // Check if virtio net device can receive packet
+        if (net->can_write_packet_to_virtio &&
+            net->can_write_packet_to_virtio(net)) {
+            net->write_packet_to_virtio(net, buf, len);
+        }
+        // If virtio queue is full, packet is dropped
     }
-end:
+
     return NULL;
 }
 
