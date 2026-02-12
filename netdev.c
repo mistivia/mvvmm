@@ -36,8 +36,8 @@ write_packet_to_ether(EthernetDevice *net, const uint8_t *buf, int len)
 static ssize_t
 timed_read(int fd, void *buf, size_t len, int timeout_ms)
 {
-    struct pollfd pfd;
-    int ret;
+    struct pollfd pfd = {0};
+    int ret = 0;
 
     pfd.fd = fd;
     pfd.events = POLLIN;
