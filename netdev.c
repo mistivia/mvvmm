@@ -1,4 +1,4 @@
-#include <bits/types/struct_timeval.h>
+#include <poll.h>
 #include <pthread.h>
 #include <string.h>
 #include <stdlib.h>
@@ -39,18 +39,18 @@ tap_net_rx_thread(void *arg)
     EthernetDevice *net = arg;
     struct tap_net_ctx *ctx = net->opaque;
     uint8_t buf[TAP_BUF_SIZE];
-    fd_set rfds;
+    struct pollfd pfd;
     int ret;
 
     if (!ctx || ctx->fd < 0) {
         return NULL;
     }
 
+    pfd.fd = ctx->fd;
+    pfd.events = POLLIN;
+
     while (1) {
-        FD_ZERO(&rfds);
-        FD_SET(ctx->fd, &rfds);
-        struct timeval timeout = {0, 3000};
-        ret = select(ctx->fd + 1, &rfds, NULL, NULL, &timeout);
+        ret = poll(&pfd, 1, 300);
         struct tap_net_ctx *ctx = net->opaque;
         pthread_mutex_lock(&ctx->lock);
         if (ctx->quit) {
@@ -62,11 +62,11 @@ tap_net_rx_thread(void *arg)
             if (errno == EINTR) {
                 continue;
             }
-            perror("tap_net_rx_thread: select failed");
+            perror("tap_net_rx_thread: poll failed");
             break;
         }
 
-        if (FD_ISSET(ctx->fd, &rfds)) {
+        if (pfd.revents & POLLIN) {
             while (1) {
                 ssize_t len = read(ctx->fd, buf, sizeof(buf));
                 if (len < 0) {
