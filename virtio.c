@@ -72,7 +72,7 @@
 #define VIRTIO_MMIO_CONFIG_GENERATION	0x0fc
 #define VIRTIO_MMIO_CONFIG		0x100
 
-#define MAX_QUEUE 8
+#define MAX_QUEUE 2
 #define MAX_CONFIG_SPACE_SIZE 256
 
 typedef struct {
