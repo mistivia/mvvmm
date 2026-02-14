@@ -9,8 +9,7 @@ A small VMM on KVM with just enough features, not ready for production, but easy
 - [x] Network interface
 - [x] Graceful shutdown
 - [x] Run Codex/Claude Code/OpenClaw/...
-- [x] Better performance with `irqfd`
-- [ ] Better performance with `ioeventfd`
+- [x] Better performance with `irqfd` and `ioeventfd`
 - [ ] Better performance with `VIRTIO_F_EVENT_IDX`
 - [ ] Symmetric Multiprocessing (SMP) 
 
