@@ -35,6 +35,8 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <sys/eventfd.h>
+#include <poll.h>
+#include <errno.h>
 
 #include "virtio.h"
 #include "config.h"
@@ -127,8 +129,15 @@ struct VIRTIODevice {
     uint8_t config_space[MAX_CONFIG_SPACE_SIZE];
     pthread_mutex_t lock;
     int max_queue_num;
+    uint64_t mmio_addr;                     /* MMIO base address */
+    int ioeventfd[MAX_QUEUE];               /* eventfd for each queue notify */
+    pthread_t ioeventfd_thread;             /* thread polling ioeventfds */
+    bool ioeventfd_enabled;                 /* whether ioeventfd is active */
 };
 
+static void queue_notify(VIRTIODevice *s, int queue_idx);
+static int virtio_ioeventfd_start(VIRTIODevice *s);
+static void virtio_ioeventfd_stop(VIRTIODevice *s);
 
 static void put_le32(void* ptr, uint32_t val)
 {
@@ -205,7 +214,7 @@ static uint8_t* guest_addr_to_host_addr(VIRTIODevice *s, uint64_t guest_addr) {
     return NULL;
 }
 
-static int virtio_init(VIRTIODevice *s, VIRTIOBusDef bus,
+static int virtio_init(VIRTIODevice *s, VIRTIOBusDef bus, uint64_t mmio_addr,
                         uint32_t device_id, int config_space_size,
                         VIRTIODeviceRecvFunc *device_recv, int max_queue_num)
 {
@@ -215,6 +224,11 @@ static int virtio_init(VIRTIODevice *s, VIRTIOBusDef bus,
     s->irq = bus.irq;
     s->irq.irqfd = -1;
     s->get_ram_ptr = guest_addr_to_host_addr;
+    s->mmio_addr = mmio_addr;
+    for (int i = 0; i < MAX_QUEUE; i++) {
+        s->ioeventfd[i] = -1;
+    }
+    s->ioeventfd_enabled = false;
 
     s->device_id = device_id;
     s->vendor_id = 0xffff;
@@ -227,6 +241,11 @@ static int virtio_init(VIRTIODevice *s, VIRTIOBusDef bus,
     /* Initialize irqfd for this device */
     if (virtio_irqfd_init(&s->irq) < 0) {
         fprintf(stderr, "virtio_init: failed to initialize irqfd\n");
+        return -1;
+    }
+    /* Initialize ioeventfd for queue notifications */
+    if (virtio_ioeventfd_start(s) < 0) {
+        fprintf(stderr, "virtio_init: ioeventfd initialization failed, falling back to MMIO exits\n");
         return -1;
     }
     return 0;
@@ -474,6 +493,128 @@ void virtio_irqfd_cleanup(IRQSignal *irq)
     if (irq->irqfd >= 0) {
         close(irq->irqfd);
         irq->irqfd = -1;
+    }
+}
+
+/* ioeventfd functions */
+static int virtio_ioeventfd_register(VIRTIODevice *s, int queue_idx)
+{
+    struct kvm_ioeventfd ioevent = {0};
+    int fd;
+
+    fd = eventfd(0, EFD_NONBLOCK);
+    if (fd < 0) {
+        perror("eventfd");
+        return -1;
+    }
+
+    ioevent.fd = fd;
+    ioevent.datamatch = queue_idx;  /* guest writes queue index to QUEUE_NOTIFY */
+    ioevent.len = 4;                /* 32-bit write */
+    ioevent.addr = s->mmio_addr + VIRTIO_MMIO_QUEUE_NOTIFY;
+    ioevent.flags = KVM_IOEVENTFD_FLAG_DATAMATCH;
+
+    if (ioctl(s->irq.vmfd, KVM_IOEVENTFD, &ioevent) < 0) {
+        perror("KVM_IOEVENTFD");
+        close(fd);
+        return -1;
+    }
+
+    s->ioeventfd[queue_idx] = fd;
+    return 0;
+}
+
+static void virtio_ioeventfd_unregister(VIRTIODevice *s, int queue_idx)
+{
+    int fd = s->ioeventfd[queue_idx];
+    if (fd >= 0) {
+        close(fd);
+        s->ioeventfd[queue_idx] = -1;
+    }
+}
+
+static void *virtio_ioeventfd_poll_thread(void *arg)
+{
+    VIRTIODevice *s = arg;
+    struct pollfd pfds[MAX_QUEUE];
+    int nfds = 0;
+    int i;
+
+    /* setup pollfd for each queue */
+    for (i = 0; i < MAX_QUEUE; i++) {
+        if (s->ioeventfd[i] >= 0) {
+            pfds[nfds].fd = s->ioeventfd[i];
+            pfds[nfds].events = POLLIN;
+            pfds[nfds].revents = 0;
+            nfds++;
+        }
+    }
+
+    while (s->ioeventfd_enabled) {
+        int ret = poll(pfds, nfds, 300); /* timeout 1 second */
+        if (ret < 0) {
+            if (errno == EINTR)
+                continue;
+            perror("poll");
+            break;
+        }
+        if (ret == 0) {
+            /* timeout, check flag again */
+            continue;
+        }
+
+        for (i = 0; i < nfds; i++) {
+            if (pfds[i].revents & POLLIN) {
+                uint64_t val;
+                /* read to clear eventfd */
+                read(pfds[i].fd, &val, sizeof(val));
+                /* find queue index */
+                int qidx;
+                for (qidx = 0; qidx < MAX_QUEUE; qidx++) {
+                    if (s->ioeventfd[qidx] == pfds[i].fd)
+                        break;
+                }
+                if (qidx < MAX_QUEUE) {
+                    pthread_mutex_lock(&s->lock);
+                    queue_notify(s, qidx);
+                    pthread_mutex_unlock(&s->lock);
+                }
+            }
+        }
+    }
+    return NULL;
+}
+
+static int virtio_ioeventfd_start(VIRTIODevice *s)
+{
+    int i;
+    for (i = 0; i < MAX_QUEUE; i++) {
+        if (virtio_ioeventfd_register(s, i) < 0) {
+            /* cleanup previously registered */
+            while (--i >= 0) {
+                virtio_ioeventfd_unregister(s, i);
+            }
+            return -1;
+        }
+    }
+    s->ioeventfd_enabled = true;
+    if (pthread_create(&s->ioeventfd_thread, NULL, virtio_ioeventfd_poll_thread, s) != 0) {
+        perror("pthread_create");
+        s->ioeventfd_enabled = false;
+        for (i = 0; i < MAX_QUEUE; i++) {
+            virtio_ioeventfd_unregister(s, i);
+        }
+        return -1;
+    }
+    return 0;
+}
+
+static void virtio_ioeventfd_stop(VIRTIODevice *s)
+{
+    s->ioeventfd_enabled = false;
+    pthread_join(s->ioeventfd_thread, NULL);
+    for (int i = 0; i < MAX_QUEUE; i++) {
+        virtio_ioeventfd_unregister(s, i);
     }
 }
 
@@ -944,14 +1085,14 @@ static int virtio_block_recv_request(VIRTIODevice *s, int queue_idx,
     return 0;
 }
 
-VIRTIODevice *virtio_block_init(VIRTIOBusDef bus, BlockDevice *bs)
+VIRTIODevice *virtio_block_init(VIRTIOBusDef bus, uint64_t mmio_addr, BlockDevice *bs)
 {
     VIRTIOBlockDevice *s = {0};
     uint64_t nb_sectors = {0};
 
     s = malloc(sizeof(*s));
     *s = (VIRTIOBlockDevice){0};
-    if (virtio_init(&s->common, bus,
+    if (virtio_init(&s->common, bus, mmio_addr,
                 2, 8, virtio_block_recv_request, VIRTIO_BLK_MAX_QUEUE_NUM) < 0) {
         free(s);
         return NULL;
@@ -967,6 +1108,7 @@ VIRTIODevice *virtio_block_init(VIRTIOBusDef bus, BlockDevice *bs)
 
 void virtio_block_destroy(VIRTIODevice *s) {
     VIRTIOBlockDevice *bs = (void*)s;
+    virtio_ioeventfd_stop(s);
     virtio_irqfd_cleanup(&s->irq);
     free(bs->bs);
 }
@@ -1072,13 +1214,13 @@ end:
     pthread_mutex_unlock(&s->lock);
 }
 
-VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, EthernetDevice *es)
+VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, uint64_t mmio_addr, EthernetDevice *es)
 {
     VIRTIONetDevice *s = NULL;
 
     s = malloc(sizeof(*s));
     *s = (VIRTIONetDevice){0};
-    if (virtio_init(&s->common, bus,
+    if (virtio_init(&s->common, bus, mmio_addr,
                 1, 6 + 2, virtio_net_recv_request, VIRTIO_NET_MAX_QUEUE_NUM) < 0) {
         free(s);
         return NULL;
@@ -1102,6 +1244,7 @@ VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, EthernetDevice *es)
 
 void virtio_net_destroy(VIRTIODevice *s) {
     VIRTIONetDevice *es = (void*)s;
+    virtio_ioeventfd_stop(s);
     virtio_irqfd_cleanup(&s->irq);
     free(es->es);
 }

@@ -174,7 +174,7 @@ mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
     bus.irq = irq;
 
     // Initialize virtio network device
-    self->net = virtio_net_init(bus, net);
+    self->net = virtio_net_init(bus, VIRTIO_NET_MMIO_ADDR, net);
     if (!self->net) {
         fprintf(stderr, "failed to initialize virtio net device\n");
         goto fail;
