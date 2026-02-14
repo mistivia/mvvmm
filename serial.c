@@ -52,24 +52,30 @@ static inline int is_rx_intr_enabled(struct serial *self) {
     return self->regs[1] & 0b0001;
 }
 
-static inline void trigger_serial_intr(struct mvvm *vm) {
+static inline void set_irq(int vm_fd) {
     struct kvm_irq_level irq = {0};
     irq.irq = 4;
     irq.level = 1;
-    if (ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq) != 0) {
-        fprintf(stderr, "failed to set irqline.\n");
-    }
-    irq.level = 0;
-    if (ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq) != 0) {
+    if (ioctl(vm_fd, KVM_IRQ_LINE, &irq) != 0) {
         fprintf(stderr, "failed to set irqline.\n");
     }
 }
 
-void serial_init(struct serial *self) {
+static inline void clear_irq(int vm_fd) {
+    struct kvm_irq_level irq = {0};
+    irq.irq = 4;
+    irq.level = 0;
+    if (ioctl(vm_fd, KVM_IRQ_LINE, &irq) != 0) {
+        fprintf(stderr, "failed to set irqline.\n");
+    }
+}
+
+void serial_init(struct serial *self, int vmfd) {
     memset(self->regs, 0, sizeof(self->regs));
     self->regs[5] = 0x60;
     self->dl[0] = 0;
     self->dl[1] = 0;
+    self->vm_fd = vmfd;
     clear_intr(self);
     pthread_mutex_init(&self->rx_lock, NULL);
     pthread_cond_init(&self->rx_cond, NULL);
@@ -94,7 +100,7 @@ void write_to_serial(struct mvvm *vm, char c) {
     serial->regs[0] = c;
     if (is_rx_intr_enabled(serial)) {
         set_rx_intr(serial);
-        trigger_serial_intr(vm);
+        set_irq(vm->vm_fd);
     }
     set_data_ready(serial);
 end:
@@ -109,6 +115,7 @@ static uint8_t read_reg(struct serial *self, int offset) {
             set_tx_intr(self);
         } else {
             clear_intr(self);
+            clear_irq(self->vm_fd);
         }
         return ret;
     }
@@ -144,7 +151,7 @@ void handle_serial(struct mvvm *vm, struct kvm_run *run) {
             if (is_tx_intr_enabled(serial)) {
                 if (!is_rx_intr_set(serial)) {
                     set_tx_intr(serial);
-                    trigger_serial_intr(vm);
+                    set_irq(vm->vm_fd);
                 }
             }
         } else {

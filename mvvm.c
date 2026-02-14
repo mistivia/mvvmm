@@ -146,7 +146,7 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char
         return -1;
     }
     // Initialize serial port
-    serial_init(&self->serial);
+    serial_init(&self->serial, self->vm_fd);
     // init virtio block device
     if (disk != NULL) {
         if (mvvm_init_virtio_blk(self, disk) < 0) {

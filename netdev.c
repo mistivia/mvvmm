@@ -66,7 +66,7 @@ tap_net_rx_thread(void *arg)
 {
     EthernetDevice *net = arg;
     struct tap_net_ctx *ctx = net->opaque;
-    uint8_t buf[TAP_BUF_SIZE];
+    uint8_t buf[TAP_BUF_SIZE] = {0};
 
     if (!ctx || ctx->fd < 0) {
         return NULL;
