@@ -34,6 +34,7 @@
 #include <linux/kvm.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <sys/eventfd.h>
 
 #include "virtio.h"
 #include "config.h"
@@ -204,7 +205,7 @@ static uint8_t* guest_addr_to_host_addr(VIRTIODevice *s, uint64_t guest_addr) {
     return NULL;
 }
 
-static void virtio_init(VIRTIODevice *s, VIRTIOBusDef bus,
+static int virtio_init(VIRTIODevice *s, VIRTIOBusDef bus,
                         uint32_t device_id, int config_space_size,
                         VIRTIODeviceRecvFunc *device_recv, int max_queue_num)
 {
@@ -212,6 +213,7 @@ static void virtio_init(VIRTIODevice *s, VIRTIOBusDef bus,
 
     s->mem_map = bus.mem_map;
     s->irq = bus.irq;
+    s->irq.irqfd = -1;
     s->get_ram_ptr = guest_addr_to_host_addr;
 
     s->device_id = device_id;
@@ -221,6 +223,13 @@ static void virtio_init(VIRTIODevice *s, VIRTIOBusDef bus,
     s->max_queue_num = max_queue_num;
     pthread_mutex_init(&s->lock, NULL);
     virtio_reset(s);
+
+    /* Initialize irqfd for this device */
+    if (virtio_irqfd_init(&s->irq) < 0) {
+        fprintf(stderr, "virtio_init: failed to initialize irqfd\n");
+        return -1;
+    }
+    return 0;
 }
 
 static uint16_t virtio_read16(VIRTIODevice *s, virtio_phys_addr_t addr)
@@ -425,6 +434,49 @@ static void set_irq(IRQSignal irqsig, int level) {
     ioctl(irqsig.vmfd, KVM_IRQ_LINE, &irq);
 }
 
+/* irqfd: trigger interrupt via eventfd */
+static void trigger_irqfd(int irqfd)
+{
+    uint64_t val = 1;
+    if (irqfd >= 0) {
+        write(irqfd, &val, sizeof(val));
+    }
+}
+
+/* initialize irqfd for a virtio device */
+int virtio_irqfd_init(IRQSignal *irq)
+{
+    int fd;
+    struct kvm_irqfd irqfd = {0};
+
+    fd = eventfd(0, EFD_NONBLOCK);
+    if (fd < 0) {
+        perror("eventfd");
+        return -1;
+    }
+
+    irqfd.fd = fd;
+    irqfd.gsi = irq->irqline;
+    irqfd.flags = 0;
+
+    if (ioctl(irq->vmfd, KVM_IRQFD, &irqfd) < 0) {
+        perror("KVM_IRQFD");
+        close(fd);
+        return -1;
+    }
+
+    irq->irqfd = fd;
+    return 0;
+}
+
+void virtio_irqfd_cleanup(IRQSignal *irq)
+{
+    if (irq->irqfd >= 0) {
+        close(irq->irqfd);
+        irq->irqfd = -1;
+    }
+}
+
 /* signal that the descriptor has been consumed */
 static void virtio_consume_desc(VIRTIODevice *s,
                                 int queue_idx, int desc_idx, int desc_len)
@@ -443,10 +495,9 @@ static void virtio_consume_desc(VIRTIODevice *s,
     virtio_write32(s, ring_addr, desc_idx);
     virtio_write32(s, ring_addr + 4, desc_len);
     virtio_write16(s, index_addr, index + 1);
-    
+
     s->int_status |= 1;
-    set_irq(s->irq, 1);
-    set_irq(s->irq, 0);
+    trigger_irqfd(s->irq.irqfd);
 }
 
 static int get_desc_rw_size(VIRTIODevice *s, 
@@ -900,10 +951,13 @@ VIRTIODevice *virtio_block_init(VIRTIOBusDef bus, BlockDevice *bs)
 
     s = malloc(sizeof(*s));
     *s = (VIRTIOBlockDevice){0};
-    virtio_init(&s->common, bus,
-                2, 8, virtio_block_recv_request, VIRTIO_BLK_MAX_QUEUE_NUM);
+    if (virtio_init(&s->common, bus,
+                2, 8, virtio_block_recv_request, VIRTIO_BLK_MAX_QUEUE_NUM) < 0) {
+        free(s);
+        return NULL;
+    }
     s->bs = bs;
-    
+
     nb_sectors = bs->get_sector_count(bs);
     put_le32(s->common.config_space, nb_sectors);
     put_le32(s->common.config_space + 4, nb_sectors >> 32);
@@ -913,6 +967,7 @@ VIRTIODevice *virtio_block_init(VIRTIOBusDef bus, BlockDevice *bs)
 
 void virtio_block_destroy(VIRTIODevice *s) {
     VIRTIOBlockDevice *bs = (void*)s;
+    virtio_irqfd_cleanup(&s->irq);
     free(bs->bs);
 }
 
@@ -1023,8 +1078,11 @@ VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, EthernetDevice *es)
 
     s = malloc(sizeof(*s));
     *s = (VIRTIONetDevice){0};
-    virtio_init(&s->common, bus,
-                1, 6 + 2, virtio_net_recv_request, VIRTIO_NET_MAX_QUEUE_NUM);
+    if (virtio_init(&s->common, bus,
+                1, 6 + 2, virtio_net_recv_request, VIRTIO_NET_MAX_QUEUE_NUM) < 0) {
+        free(s);
+        return NULL;
+    }
     /* VIRTIO_NET_F_MAC, VIRTIO_NET_F_STATUS */
     s->common.device_features = (1 << 5) /* | (1 << 16) */;
     s->common.queue[0].manual_recv = true;
@@ -1044,6 +1102,7 @@ VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, EthernetDevice *es)
 
 void virtio_net_destroy(VIRTIODevice *s) {
     VIRTIONetDevice *es = (void*)s;
+    virtio_irqfd_cleanup(&s->irq);
     free(es->es);
 }
 

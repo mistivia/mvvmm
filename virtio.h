@@ -33,6 +33,7 @@ typedef uint64_t virtio_phys_addr_t;
 struct IRQSignal {
     int vmfd;
     int irqline;
+    int irqfd;  /* eventfd for irqfd mechanism */
 };
 typedef struct IRQSignal IRQSignal;
 
@@ -40,6 +41,10 @@ typedef struct {
     struct guest_mem_map *mem_map;
     IRQSignal irq;
 } VIRTIOBusDef;
+
+/* irqfd functions */
+int virtio_irqfd_init(IRQSignal *irq);
+void virtio_irqfd_cleanup(IRQSignal *irq);
 
 typedef struct VIRTIODevice VIRTIODevice; 
 
