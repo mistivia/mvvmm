@@ -204,14 +204,10 @@ static void virtio_reset(VIRTIODevice *s)
 
 static uint8_t* guest_addr_to_host_addr(VIRTIODevice *s, uint64_t guest_addr) {
     struct guest_mem_map *mem_map = s->mem_map;
-    for (int i = 0; i < mem_map->size; i++) {
-        struct guest_mem_map_entry *entry = &mem_map->entries[i];
-        if (guest_addr >= entry->guest_addr
-                && guest_addr < entry->guest_addr + entry->size) {
-            return entry->host_mem + (guest_addr - entry->guest_addr);
-        }
+    if (guest_addr > mem_map->size) {
+        return NULL;
     }
-    return NULL;
+    return mem_map->host_mem + guest_addr;
 }
 
 static int virtio_init(VIRTIODevice *s, VIRTIOBusDef bus, uint64_t mmio_addr,

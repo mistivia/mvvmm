@@ -108,21 +108,19 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char
     // Allocate guest memory
     // Allocate PhysMemoryMap with one entry for guest memory
     struct guest_mem_map* 
-        mem_map = malloc(sizeof(*mem_map) + sizeof(struct guest_mem_map_entry));
+        mem_map = malloc(sizeof(*mem_map));
     if (!mem_map) {
         fprintf(stderr, "failed to allocate PhysMemoryMap\n");
         return -1;
     }
-    mem_map->size = 1;
-    mem_map->entries[0].host_mem =
+    mem_map->host_mem =
         mmap(NULL, mem_size,PROT_READ | PROT_WRITE, 
             MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if (mem_map->entries[0].host_mem == MAP_FAILED) {
+    if (mem_map->host_mem == MAP_FAILED) {
         fprintf(stderr, "failed to mmap memory\n");
         return -1;
     }
-    mem_map->entries[0].guest_addr = 0;
-    mem_map->entries[0].size = mem_size;
+    mem_map->size = mem_size;
     self->mem_map = mem_map;
 
     // Register memory region with KVM
@@ -130,7 +128,7 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char
     mem.flags = 0;
     mem.guest_phys_addr = 0;
     mem.memory_size = mem_size;
-    mem.userspace_addr = (uint64_t)mem_map->entries[0].host_mem;
+    mem.userspace_addr = (uint64_t)mem_map->host_mem;
     if (ioctl(self->vm_fd, KVM_SET_USER_MEMORY_REGION, &mem) < 0) {
         fprintf(stderr, "failed to set user memory region\n");
         return -1;
@@ -164,9 +162,7 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char
 }
 
 void mvvm_destroy(struct mvvm *self) {
-    for (int i = 0; i < self->mem_map->size; i++) {
-        munmap(self->mem_map->entries[i].host_mem, self->mem_map->entries[i].size);
-    }
+    munmap(self->mem_map->host_mem, self->mem_map->size);
     close(self->cpu_fd);
     close(self->vm_fd);
     close(self->kvm_fd);
@@ -216,7 +212,7 @@ setup_e820_map(struct mvvm *vm, struct boot_params *zeropage)
     zeropage->e820_table[0].type = 1;
     // > 1MB
     zeropage->e820_table[1].addr = 0x100000;
-    zeropage->e820_table[1].size = vm->mem_map->entries[0].size - 0x100000;
+    zeropage->e820_table[1].size = vm->mem_map->size - 0x100000;
     zeropage->e820_table[1].type = 1;
 }
 
@@ -226,7 +222,6 @@ static int
 load_initrd(struct mvvm *vm, struct boot_params *zeropage,
             const char *initrd_path) 
 {
-    struct guest_mem_map_entry *entry0 = vm->mem_map->entries;
     if (initrd_path == NULL) {
         zeropage->hdr.ramdisk_image = 0;
         zeropage->hdr.ramdisk_size = 0;
@@ -251,11 +246,11 @@ load_initrd(struct mvvm *vm, struct boot_params *zeropage,
         perror("mmap initrd");
         return -1;
     }
-    if ((uint64_t)initrd_addr + st.st_size >= entry0->size) {
+    if ((uint64_t)initrd_addr + st.st_size >= vm->mem_map->size) {
         fprintf(stderr, "failed to load initrd.\n");
         return -1;
     }
-    memcpy(entry0->host_mem + initrd_addr, initrd, st.st_size);
+    memcpy(vm->mem_map->host_mem + initrd_addr, initrd, st.st_size);
     zeropage->hdr.ramdisk_image = initrd_addr;
     zeropage->hdr.ramdisk_size = st.st_size;
     // cleanup
@@ -284,7 +279,6 @@ int
 mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
             const char *initrd_path, const char *kernel_args)
 {
-    struct guest_mem_map_entry *entry0 = vm->mem_map->entries;
     int ret = 0;
     void *bz_image = NULL;
     size_t bz_image_size = 0;
@@ -309,7 +303,7 @@ mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
         goto end;
     }
     // Setup boot parameters at 0x10000
-    zeropage = (struct boot_params *)(entry0->host_mem + 0x10000);
+    zeropage = (struct boot_params *)(vm->mem_map->host_mem + 0x10000);
     memset(zeropage, 0, sizeof(*zeropage));
     memcpy(&zeropage->hdr, bz_image+0x01f1, sizeof(zeropage->hdr));
     // Setup E820 memory map
@@ -320,7 +314,7 @@ mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
     zeropage->hdr.vid_mode = 0xFFFF;
     zeropage->hdr.cmd_line_ptr = 0x20000;
     // Copy command line
-    cmd_line = (char *)(entry0->host_mem + 0x20000);
+    cmd_line = (char *)(vm->mem_map->host_mem + 0x20000);
     char *cmdline_buf = strdup(kernel_args);
     if (vm->blk) {
         cmdline_buf = cmdline_concat(cmdline_buf, VIRTIO_BLK_CMDLINE);
@@ -350,7 +344,7 @@ mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
     }
     // Copy protected mode kernel to 1MB
     setup_size = (zeropage->hdr.setup_sects + 1) * 512;
-    memcpy(entry0->host_mem + 0x100000,
+    memcpy(vm->mem_map->host_mem + 0x100000,
            (char *)bz_image + setup_size,
            bz_image_size - setup_size);
     // cleanup
