@@ -1,156 +1,235 @@
-# Minimal Viable Virtual Machine Monitor
+# MVVMM – Minimal Viable Virtual Machine Monitor
 
-A small VMM on KVM with just enough features, not ready for production, but easy for hacking and tweaking.
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Platform: Linux](https://img.shields.io/badge/Platform-Linux-lightgrey)](https://www.kernel.org/)
+[![Arch: x86_64](https://img.shields.io/badge/Arch-x86__64-green)](https://en.wikipedia.org/wiki/X86-64)
+[![Requires: KVM](https://img.shields.io/badge/Requires-KVM-orange)](https://www.linux-kvm.org/)
 
-## Current Status
+A lightweight, hackable Virtual Machine Monitor (VMM) built on KVM. Designed for experimentation and learning, not ready for production use.
 
-- [x] Boot Linux
-- [x] Block device
-- [x] Network interface
-- [x] Graceful shutdown
-- [x] Run Codex/Claude Code/OpenClaw/...
-- [x] Better performance with `irqfd` and `ioeventfd`
-- [x] Better performance with virtqueue interrupt suppression
+**Features**:
+- Boot Linux with minimal overhead
+- Virtio‑based block and network devices
+- Graceful shutdown via guest module
+- Performance optimizations: `irqfd`, `ioeventfd`, virtqueue interrupt suppression
+- Run AI agents (Codex, Claude Code, OpenClaw, etc.)
 
-## Guide
+## Table of Contents
 
-Download `mvvmm`:
+- [Quick Start](#quick-start)
+- [Prerequisites](#prerequisites)
+- [Building](#building)
+- [Creating a Guest](#creating-a-guest)
+- [Running the VM](#running-the-vm)
+- [Power Management](#power-management)
+- [Screenshot](#screenshot)
+- [License](#license)
 
-    git clone --depth 1 https://github.com/mistivia/mvvmm
+## Quick Start
 
-Build:
+For a quick test, follow these steps:
 
-    cd mvvmm
-    make
+1. Clone the repository and build the VMM:
 
-Download linux kernel source:
+```bash
+git clone --depth 1 https://github.com/mistivia/mvvmm
+cd mvvmm
+make
+```
 
-    wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.9.tar.xz
-    tar -xf linux-6.18.9.tar.xz
-    cd linux-6.18.9
+2. Prepare a Linux kernel with VirtIO‑MMIO support (see [Creating a Guest](#creating-a-guest) for details).
 
-Configure Linux kernel:
+3. Create a disk image (Alpine Linux minirootfs for example) and a simple initramfs.
 
-    make defconfig
-    make menuconfig
+4. Run the VM:
 
-Press `/` and search for the following configs, set them to `y`:
+```bash
+./mvvmm -k vmlinuz -i initrd -d disk.img -t tap0
+```
 
-    CONFIG_VIRTIO_MMIO
-    CONFIG_VIRTIO_MMIO_CMDLINE_DEVICES
+The following sections provide detailed instructions for each step.
 
-Build Linux kernel:
+## Prerequisites
 
-    make -j4
-    cp arch/x86/boot/bzImage ../vmlinuz
-    cd ..
+- A Linux host with KVM support (`/dev/kvm` accessible)
+- GCC, Make, and standard build tools
+- Root privileges for network setup and disk mounting
+- Enough RAM and disk space for the guest
 
-Setup a TAP device and enable NAT:
+## Building
 
-    ip tuntap add dev tap0 mod tap
-    ip link set dev tap0 up
-    ip addr add 192.168.200.1/24 dev tap0
+Compile `mvvmm` with a single command:
 
-    sysctl -w net.ipv4.ip_forward=1
-    iptables -A FORWARD -i tap0 -j ACCEPT
-    iptables -A FORWARD -o tap0 -j ACCEPT
-    iptables -t nat -A POSTROUTING -o [YOUR_INTERNET_INTERFACE] -j MASQUERADE
+```bash
+make
+```
 
-Download BusyBox and install it:
+The binary `mvvmm` will be produced in the current directory.
 
-    wget https://busybox.net/downloads/binaries/1.35.0-x86_64-linux-musl/busybox
-    mkdir -p initramfs/bin
-    chmod +x busybox
-    ./busybox --install initramfs/bin/
+## Creating a Guest
 
-Create a `init` script:
+### 1. Linux Kernel
 
-    vim initramfs/init
+Download and build a recent Linux kernel (6.18.9 used in this example):
 
-`init` content:
+```bash
+wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.9.tar.xz
+tar -xf linux-6.18.9.tar.xz
+cd linux-6.18.9
+```
 
-    #!/bin/sh
+Enable the necessary VirtIO‑MMIO options:
 
-    mount -t devtmpfs devtmpfs /dev
-    mount -t proc proc /proc
-    mount -t sysfs sys /sys
-    mkdir -p /dev/pts
-    mount -t devpts devpts /dev/pts
-    mdev -s
+```bash
+make defconfig
+make menuconfig
+```
 
-    mkdir /sysroot
-    mount /dev/vda /sysroot
-    mount --move /dev /sysroot/dev
-    mount --move /proc /sysroot/proc
-    mount --move /sys /sysroot/sys 
+Search for and enable:
 
-    ip link set eth0 up
-    ip addr add 192.168.200.2/24 dev eth0
-    ip route add default via 192.168.200.1
+- `CONFIG_VIRTIO_MMIO`
+- `CONFIG_VIRTIO_MMIO_CMDLINE_DEVICES`
 
-    exec chroot /sysroot /sbin/init
+Then compile the kernel:
 
-Create initrd:
+```bash
+make -j$(nproc)
+cp arch/x86/boot/bzImage ../vmlinuz
+cd ..
+```
 
-    cd initramfs
-    chmod +x init
-    find . -print0 | cpio --null -ov --format=newc | gzip > ../initrd
-    cd ..
+### 2. Initial RAM Disk (initrd)
 
-Download Alpine Linux minirootfs:
+Create a minimal initramfs with BusyBox:
 
-    wget https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/x86_64/alpine-minirootfs-3.23.3-x86_64.tar.gz
+```bash
+wget https://busybox.net/downloads/binaries/1.35.0-x86_64-linux-musl/busybox
+mkdir -p initramfs/bin
+chmod +x busybox
+./busybox --install initramfs/bin/
+```
 
-Create a disk image with hole, and mount it:
+Write an `init` script at `initramfs/init`:
 
-    dd if=/dev/zero of=disk.img bs=1 count=0 seek=15G
-    mkfs.ext4 disk.img
-    mkdir mnt
-    sudo mount disk.img ./mnt
+```sh
+#!/bin/sh
 
-Install Alpine Linux, chroot into minirootfs and do some setup:
+mount -t devtmpfs devtmpfs /dev
+mount -t proc proc /proc
+mount -t sysfs sys /sys
+mkdir -p /dev/pts
+mount -t devpts devpts /dev/pts
+mdev -s
 
-    cd mnt
-    tar -xf ../alpine-minirootfs-3.23.3-x86_64.tar.gz
-    cd ..
-    sudo chroot ./mnt
-    export PATH=/bin:/sbin:$PATH
-    passwd
-    echo 'nameserver 8.8.8.8' > ./etc/resolv.conf
-    apk add openrc fastfetch
+mkdir /sysroot
+mount /dev/vda /sysroot
+mount --move /dev /sysroot/dev
+mount --move /proc /sysroot/proc
+mount --move /sys /sysroot/sys
 
-Edit `/etc/inittab` and uncomment this line to enable getty on seiral port:
+ip link set eth0 up
+ip addr add 192.168.200.2/24 dev eth0
+ip route add default via 192.168.200.1
 
-    ttyS0::respawn:/sbin/getty -L 115200 ttyS0 vt100
+exec chroot /sysroot /sbin/init
+```
 
-Exit chroot and unmount disk:
+Make it executable and pack the initrd:
 
-    exit
-    sudo umount ./mnt
+```bash
+cd initramfs
+chmod +x init
+find . -print0 | cpio --null -ov --format=newc | gzip > ../initrd
+cd ..
+```
 
-Start virtual machine:
+### 3. Disk Image
 
-    ./mvvm -k vmlinuz -i initrd -d disk.img -t tap0
+Create a sparse disk image and install Alpine Linux:
 
-Login and run `fastfetch`:
+```bash
+dd if=/dev/zero of=disk.img bs=1 count=0 seek=15G
+mkfs.ext4 disk.img
+mkdir mnt
+sudo mount disk.img ./mnt
+```
 
-    fastfetch
+Extract Alpine minirootfs:
 
-When everything is done, shutdown the virtual machine:
+```bash
+cd mnt
+wget https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/x86_64/alpine-minirootfs-3.23.3-x86_64.tar.gz
+tar -xf alpine-minirootfs-3.23.3-x86_64.tar.gz
+cd ..
+```
 
-    poweroff
+Chroot into the image for basic setup:
 
-And press Ctrl+A Ctrl+C to quit.
+```bash
+sudo chroot ./mnt
+export PATH=/bin:/sbin:$PATH
+passwd
+echo 'nameserver 8.8.8.8' > ./etc/resolv.conf
+apk add openrc fastfetch
+```
 
-You can also set up a `sshd` and disable serial port. With keyboard, mouse, and serial ports disabled, Alpine Linux can boot in 300 ms.
+Enable serial console by uncommenting the following line in `/etc/inittab`:
+
+```
+ttyS0::respawn:/sbin/getty -L 115200 ttyS0 vt100
+```
+
+Exit chroot and unmount:
+
+```bash
+exit
+sudo umount ./mnt
+```
+
+### 4. Network Setup
+
+Create a TAP device and enable NAT:
+
+```bash
+ip tuntap add dev tap0 mod tap
+ip link set dev tap0 up
+ip addr add 192.168.200.1/24 dev tap0
+
+sysctl -w net.ipv4.ip_forward=1
+iptables -A FORWARD -i tap0 -j ACCEPT
+iptables -A FORWARD -o tap0 -j ACCEPT
+iptables -t nat -A POSTROUTING -o [YOUR_INTERNET_INTERFACE] -j MASQUERADE
+```
+
+Replace `[YOUR_INTERNET_INTERFACE]` with your host's outward‑facing interface (e.g., `eth0`, `wlan0`).
+
+## Running the VM
+
+Launch the virtual machine with the kernel, initrd, disk image, and TAP device:
+
+```bash
+./mvvmm -k vmlinuz -i initrd -d disk.img -t tap0
+```
+
+You will see the serial console. Log in with the root password you set during the chroot step.
+
+Once logged in, you can run `fastfetch` to verify the system is operational.
+
+To shut down the guest, issue:
+
+```bash
+poweroff
+```
+
+Then press `Ctrl+A Ctrl+C` in the terminal to exit the VMM.
 
 ## Power Management
 
-`mvvmm` don't have ACPI. I wrote a small Linux kernel module to handle poweroff. See `guest-module`.
+`mvvmm` does not have ACPI. A small Linux kernel module (`guest-module/`) handles poweroff and graceful shutdown.
 
-`guest-module` will also provide graceful shutdown with host received SIGTERM.
+When the host receives SIGTERM, the guest module will shut down the guest gracefully.
 
-There is no reboot. Just restart the virtual machine process if you want a reboot.
+Reboot is not supported; restart the virtual machine process if you need to reboot.
 
 ## Screenshot
 
