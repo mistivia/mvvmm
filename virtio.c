@@ -633,6 +633,10 @@ static void virtio_consume_desc(VIRTIODevice *s,
     virtio_write32(s, ring_addr + 4, desc_len);
     virtio_write16(s, index_addr, index + 1);
 
+    uint16_t flags = virtio_read16(s, qs->avail_addr);
+    if (flags & 0x01) { // intr suppression
+        return;
+    }
     s->int_status |= 1;
     trigger_irqfd(s->irq.irqfd);
 }
