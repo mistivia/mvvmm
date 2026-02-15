@@ -79,9 +79,19 @@ int init_cpu(int kvm_fd, int cpu_fd) {
     return 0;
 }
 
+#define PAGE_SIZE 4096
+#define TSS_PAGES 3
+#define IDENTITY_MAP_PAGES 1
+#define RESERVED_PAGES (TSS_PAGES + IDENTITY_MAP_PAGES)
+// Reserved pages are placed below 4GB
+#define RESERVED_ADDR 0xFFFBD000ULL
+#define RESERVED_SIZE (RESERVED_PAGES * PAGE_SIZE)
+
 int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char *network) {
     struct kvm_pit_config pit = {0};
     struct kvm_userspace_memory_region mem = {0};
+    uint64_t tss_addr = RESERVED_ADDR;
+    uint64_t identity_map_addr = RESERVED_ADDR + TSS_PAGES * PAGE_SIZE;
     self->quit = 0;
     // Open KVM device
     self->kvm_fd = open("/dev/kvm", O_RDWR | O_CLOEXEC);
@@ -105,16 +115,28 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char
         fprintf(stderr, "failed to create pit\n");
         return -1;
     }
+    
+    // Set TSS address (3 pages)
+    if (ioctl(self->vm_fd, KVM_SET_TSS_ADDR, tss_addr) < 0) {
+        fprintf(stderr, "failed to set TSS address\n");
+        return -1;
+    }
+    
+    // Set Identity Map address (1 page)
+    if (ioctl(self->vm_fd, KVM_SET_IDENTITY_MAP_ADDR, &identity_map_addr) < 0) {
+        fprintf(stderr, "failed to set identity map address\n");
+        return -1;
+    }
+    
     // Allocate guest memory
-    // Allocate PhysMemoryMap with one entry for guest memory
-    struct guest_mem_map* 
+    struct guest_mem_map*
         mem_map = malloc(sizeof(*mem_map));
     if (!mem_map) {
         fprintf(stderr, "failed to allocate PhysMemoryMap\n");
         return -1;
     }
     mem_map->host_mem =
-        mmap(NULL, mem_size,PROT_READ | PROT_WRITE, 
+        mmap(NULL, mem_size,PROT_READ | PROT_WRITE,
             MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     if (mem_map->host_mem == MAP_FAILED) {
         fprintf(stderr, "failed to mmap memory\n");
@@ -123,15 +145,39 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char
     mem_map->size = mem_size;
     self->mem_map = mem_map;
 
-    // Register memory region with KVM
-    mem.slot = 0;
-    mem.flags = 0;
-    mem.guest_phys_addr = 0;
-    mem.memory_size = mem_size;
-    mem.userspace_addr = (uint64_t)mem_map->host_mem;
-    if (ioctl(self->vm_fd, KVM_SET_USER_MEMORY_REGION, &mem) < 0) {
-        fprintf(stderr, "failed to set user memory region\n");
-        return -1;
+    // Register memory regions with KVM
+    if (mem_size <= RESERVED_ADDR) {
+        mem.slot = 0;
+        mem.flags = 0;
+        mem.guest_phys_addr = 0;
+        mem.memory_size = mem_size;
+        mem.userspace_addr = (uint64_t)mem_map->host_mem;
+        if (ioctl(self->vm_fd, KVM_SET_USER_MEMORY_REGION, &mem) < 0) {
+            fprintf(stderr, "failed to set user memory region\n");
+            return -1;
+        }
+    } else {
+        mem.slot = 0;
+        mem.flags = 0;
+        mem.guest_phys_addr = 0;
+        mem.memory_size = RESERVED_ADDR;
+        mem.userspace_addr = (uint64_t)mem_map->host_mem;
+        if (ioctl(self->vm_fd, KVM_SET_USER_MEMORY_REGION, &mem) < 0) {
+            fprintf(stderr, "failed to set user memory region 0\n");
+            return -1;
+        }
+        uint64_t region1_start = RESERVED_ADDR + RESERVED_SIZE;
+        if (mem_size > region1_start) {
+            mem.slot = 1;
+            mem.flags = 0;
+            mem.guest_phys_addr = region1_start;
+            mem.memory_size = mem_size - region1_start;
+            mem.userspace_addr = (uint64_t)mem_map->host_mem + region1_start;
+            if (ioctl(self->vm_fd, KVM_SET_USER_MEMORY_REGION, &mem) < 0) {
+                fprintf(stderr, "failed to set user memory region 1\n");
+                return -1;
+            }
+        }
     }
     // Create virtual CPU
     self->cpu_fd = ioctl(self->vm_fd, KVM_CREATE_VCPU, 0);
