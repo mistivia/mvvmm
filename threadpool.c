@@ -68,14 +68,13 @@ thread_pool_run(struct thread_pool *self, void* (*task_fn)(void*), void *arg)
     for (int i = 0; i < self->worker_num; i++) {
         if (!self->is_working[i]) {
             self->is_working[i] = true;
+            pthread_mutex_unlock(&self->lock);
             struct worker_thread *worker = self->workers[i];
             pthread_mutex_lock(&worker->lock);
             if (self->quit) {
-                pthread_mutex_unlock(&self->lock);
                 pthread_mutex_unlock(&worker->lock);
                 return -1;
             }
-            pthread_mutex_unlock(&self->lock);
             worker->task_fn = task_fn;
             worker->arg = arg;
             pthread_cond_signal(&worker->cond);
@@ -88,9 +87,7 @@ thread_pool_run(struct thread_pool *self, void* (*task_fn)(void*), void *arg)
 }
 
 void delete_thread_pool(struct thread_pool* pool) {
-    pthread_mutex_lock(&pool->lock);
     pool->quit = 1;
-    pthread_mutex_unlock(&pool->lock);
     for (int i = 0; i < pool->worker_num; i++) {
         void *ret;
         pthread_join(pool->workers[i]->th, &ret);
