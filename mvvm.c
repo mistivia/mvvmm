@@ -257,9 +257,21 @@ setup_e820_map(struct mvvm *vm, struct boot_params *zeropage)
     zeropage->e820_table[0].size = 0xA0000;
     zeropage->e820_table[0].type = 1;
     // > 1MB
-    zeropage->e820_table[1].addr = 0x100000;
-    zeropage->e820_table[1].size = vm->mem_map->size - 0x100000;
-    zeropage->e820_table[1].type = 1;
+    if (vm->mem_map->size <= RESERVED_ADDR) {
+        zeropage->e820_table[1].addr = 0x100000;
+        zeropage->e820_table[1].size = vm->mem_map->size - 0x100000;
+        zeropage->e820_table[1].type = 1;
+    } else {
+        zeropage->e820_table[1].addr = 0x100000;
+        zeropage->e820_table[1].size = RESERVED_ADDR - 0x100000;
+        zeropage->e820_table[1].type = 1;
+        if (vm->mem_map->size > RESERVED_ADDR + RESERVED_SIZE) {
+            zeropage->e820_entries = 3;
+            zeropage->e820_table[2].addr = RESERVED_ADDR + RESERVED_SIZE;
+            zeropage->e820_table[2].size = vm->mem_map->size - (RESERVED_ADDR + RESERVED_SIZE);
+            zeropage->e820_table[2].type = 1;
+        }
+    }
 }
 
 // Load initrd into guest memory at 512MB mark.
