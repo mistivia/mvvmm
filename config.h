@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Mistivia <i@mistivia.com>
+
 #pragma once
 
 #define VIRTIO_BLK_MMIO_ADDR (1024LL * 1024 * 1024 * 1024)
