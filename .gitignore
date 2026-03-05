@@ -18,3 +18,4 @@ ramdisk/
 .bashrc
 .inputrc
 .Xauthority
+compile_commands.json
