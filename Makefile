@@ -4,28 +4,31 @@ UNAME := $(shell uname -s)
 LDFLAGS := -g
 
 C_SOURCES := $(wildcard src/*.cc)
-C_OBJS := $(C_SOURCES:.cc=.o)
-C_DEPS := $(C_SOURCES:.cc=.d)
+BUILD_DIR := build
+C_OBJS := $(patsubst src/%.cc,$(BUILD_DIR)/%.o,$(C_SOURCES))
+C_DEPS := $(patsubst src/%.cc,$(BUILD_DIR)/%.d,$(C_SOURCES))
 
-TARGET := mvvmm
+TARGET := $(BUILD_DIR)/mvvmm
 
 all: $(TARGET)
 
 $(TARGET): $(C_OBJS)
+	@mkdir -p $(BUILD_DIR)
 	$(CC) $(C_OBJS) -o $@ $(LDFLAGS)
 
-src/%.o: src/%.cc
+$(BUILD_DIR)/%.o: src/%.cc
+	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
-test: mvvmm
-	./mvvmm -k ./vmlinuz -i ./initrd -m 4g -d disk.img -t vm0 2>mvvmm.err
+test: $(TARGET)
+	./$(TARGET) -k ./vmlinuz -i ./initrd -m 4g -d disk.img -t vm0 2>$(BUILD_DIR)/mvvmm.err
 
 bear:
 	make clean
 	bear -- make all
 
 clean:
-	rm -f $(C_OBJS) $(C_DEPS) $(TARGET)
+	rm -rf $(BUILD_DIR)
 
 .PHONY: all clean test bear
 

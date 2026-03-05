@@ -9,6 +9,7 @@ tmp.md
 linux-*/
 *.ko
 build.log
+build/
 *.cmd
 *.mod.c
 *.mod
