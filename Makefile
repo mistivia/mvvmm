@@ -1,11 +1,11 @@
 CC := gcc
-CFLAGS := -g -Wall -std=gnu99
+CFLAGS := -x c -g -Wall -std=gnu99
 UNAME := $(shell uname -s)
 LDFLAGS := -g
 
-C_SOURCES := $(shell find . -maxdepth 1 -name '*.c')
-C_OBJS := $(C_SOURCES:.c=.o)
-C_DEPS := $(C_SOURCES:.c=.d)
+C_SOURCES := $(shell find . -maxdepth 1 -name '*.cc')
+C_OBJS := $(C_SOURCES:.cc=.o)
+C_DEPS := $(C_SOURCES:.cc=.d)
 
 TARGET := mvvmm
 
@@ -14,7 +14,7 @@ all: $(TARGET)
 $(TARGET): $(C_OBJS)
 	$(CC) $(C_OBJS) -o $@ $(LDFLAGS)
 
-%.o: %.c
+%.o: %.cc
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
 test: mvvmm
