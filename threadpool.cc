@@ -11,7 +11,7 @@
 
 void *worker_thread_fn(void* arg)
 {
-    struct worker_thread *worker = arg;
+    struct worker_thread *worker = (struct worker_thread *)arg;
     pthread_mutex_lock(&worker->lock);
     while (1) {
         while (worker->task_fn == NULL) {
@@ -36,7 +36,7 @@ void *worker_thread_fn(void* arg)
 static struct worker_thread *
 new_worker_thread(struct thread_pool *pool, int id)
 {
-    struct worker_thread *worker = malloc(sizeof(struct worker_thread));
+    struct worker_thread *worker = (struct worker_thread *)malloc(sizeof(struct worker_thread));
     *worker = (struct worker_thread){0};
     pthread_mutex_init(&worker->lock, NULL);
     pthread_cond_init(&worker->cond, NULL);
@@ -49,14 +49,14 @@ new_worker_thread(struct thread_pool *pool, int id)
 struct thread_pool*
 new_thread_pool(int thread_num)
 {
-    struct thread_pool *pool = malloc(sizeof(struct thread_pool));
+    struct thread_pool *pool = (struct thread_pool *)malloc(sizeof(struct thread_pool));
     memset(pool, 0, sizeof(struct thread_pool));
     pthread_mutex_init(&pool->lock, NULL);
     pool->quit = 0;
     pool->worker_num = thread_num;
-    pool->workers = malloc(sizeof(struct worker_thread*) * pool->worker_num);
+    pool->workers = (struct worker_thread **)malloc(sizeof(struct worker_thread*) * pool->worker_num);
     memset(pool->workers, 0, sizeof(struct worker_thread*) * pool->worker_num);
-    pool->is_working = malloc(sizeof(bool) * pool->worker_num);
+    pool->is_working = (bool *)malloc(sizeof(bool) * pool->worker_num);
     memset(pool->is_working, 0, sizeof(bool) * pool->worker_num);
     for (int i = 0; i < pool->worker_num; i++) {
         pool->workers[i] = new_worker_thread(pool, i);

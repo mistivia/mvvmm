@@ -30,7 +30,7 @@
 #include <inttypes.h>
 #include <assert.h>
 #include <stdarg.h>
-#include <stdatomic.h>
+#include <atomic>
 #include <linux/kvm.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
@@ -203,7 +203,7 @@ static uint8_t* guest_addr_to_host_addr(VIRTIODevice *s, uint64_t guest_addr) {
     if (guest_addr > mem_map->size) {
         return NULL;
     }
-    return mem_map->host_mem + guest_addr;
+    return (uint8_t *)mem_map->host_mem + guest_addr;
 }
 
 static int virtio_init(VIRTIODevice *s, VIRTIOBusDef bus, uint64_t mmio_addr,
@@ -245,7 +245,7 @@ static int virtio_init(VIRTIODevice *s, VIRTIOBusDef bus, uint64_t mmio_addr,
 
 static uint16_t virtio_read16(VIRTIODevice *s, virtio_phys_addr_t addr)
 {
-    atomic_thread_fence(memory_order_acquire);
+    std::atomic_thread_fence(std::memory_order_acquire);
     uint8_t *ptr = NULL;
     if (addr & 1)
         return 0; /* unaligned access are not supported */
@@ -265,7 +265,7 @@ static void virtio_write16(VIRTIODevice *s, virtio_phys_addr_t addr,
     if (!ptr)
         return;
     *(uint16_t *)ptr = val;
-    atomic_thread_fence(memory_order_release);
+    std::atomic_thread_fence(std::memory_order_release);
 }
 
 static void virtio_write32(VIRTIODevice *s, virtio_phys_addr_t addr,
@@ -278,7 +278,7 @@ static void virtio_write32(VIRTIODevice *s, virtio_phys_addr_t addr,
     if (!ptr)
         return;
     *(uint32_t *)ptr = val;
-    atomic_thread_fence(memory_order_release);
+    std::atomic_thread_fence(std::memory_order_release);
 }
 
 static inline int min_int(int a, int b) {
@@ -296,7 +296,7 @@ static int virtio_memcpy_from_guest(VIRTIODevice *s, uint8_t *buf,
         ptr = s->get_ram_ptr(s, addr);
         if (!ptr)
             return -1;
-        atomic_thread_fence(memory_order_acquire);
+        std::atomic_thread_fence(std::memory_order_acquire);
         memcpy(buf, ptr, l);
         addr += l;
         buf += l;
@@ -317,7 +317,7 @@ static int virtio_memcpy_to_guest(VIRTIODevice *s, virtio_phys_addr_t addr,
         if (!ptr)
             return -1;
         memcpy(ptr, buf, l);
-        atomic_thread_fence(memory_order_release);
+        std::atomic_thread_fence(std::memory_order_release);
         addr += l;
         buf += l;
         count -= l;
@@ -329,7 +329,7 @@ static int get_desc(VIRTIODevice *s, VIRTIODesc *desc,
                     int queue_idx, int desc_idx)
 {
     QueueState *qs = &s->queue[queue_idx];
-    return virtio_memcpy_from_guest(s, (void *)desc, qs->desc_addr +
+    return virtio_memcpy_from_guest(s, (uint8_t *)desc, qs->desc_addr +
                                   desc_idx * sizeof(VIRTIODesc),
                                   sizeof(VIRTIODesc));
 }
@@ -426,7 +426,7 @@ static int memcpy_from_queue(VIRTIODevice *s, void *buf,
                              int queue_idx, int desc_idx,
                              int offset, int count)
 {
-    return memcpy_to_from_queue(s, buf, queue_idx, desc_idx, offset, count,
+    return memcpy_to_from_queue(s, (uint8_t *)buf, queue_idx, desc_idx, offset, count,
                                 false);
 }
 
@@ -434,7 +434,7 @@ static int memcpy_to_queue(VIRTIODevice *s,
                            int queue_idx, int desc_idx,
                            int offset, const void *buf, int count)
 {
-    return memcpy_to_from_queue(s, (void *)buf, queue_idx, desc_idx, offset,
+    return memcpy_to_from_queue(s, (uint8_t *)buf, queue_idx, desc_idx, offset,
                                 count, true);
 }
 
@@ -527,7 +527,7 @@ static void virtio_ioeventfd_unregister(VIRTIODevice *s, int queue_idx)
 
 static void *virtio_ioeventfd_poll_thread(void *arg)
 {
-    VIRTIODevice *s = arg;
+    VIRTIODevice *s = (VIRTIODevice *)arg;
     struct pollfd pfds[MAX_QUEUE];
     int nfds = 0;
     int i;
@@ -1016,7 +1016,7 @@ static int virtio_block_recv_request(VIRTIODevice *s, int queue_idx,
     
     if (memcpy_from_queue(s, &h, queue_idx, desc_idx, 0, sizeof(h)) < 0)
         return 0;
-    struct blk_io_callback_arg *iocb_arg = malloc(sizeof(struct blk_io_callback_arg));
+    struct blk_io_callback_arg *iocb_arg = (struct blk_io_callback_arg *)malloc(sizeof(struct blk_io_callback_arg));
     *iocb_arg = (struct blk_io_callback_arg){0};
     iocb_arg->s = s;
     iocb_arg->req.type = h.type;
@@ -1024,7 +1024,7 @@ static int virtio_block_recv_request(VIRTIODevice *s, int queue_idx,
     iocb_arg->req.desc_idx = desc_idx;
     switch(h.type) {
     case VIRTIO_BLK_T_IN:
-        iocb_arg->req.buf = malloc(write_size);
+        iocb_arg->req.buf = (uint8_t *)malloc(write_size);
         memset(iocb_arg->req.buf, 0, write_size);
         iocb_arg->req.write_size = write_size;
         ret = bs->read_async(bs, h.sector_num, iocb_arg->req.buf, 
@@ -1045,7 +1045,7 @@ static int virtio_block_recv_request(VIRTIODevice *s, int queue_idx,
             fprintf(stderr, "virtio_block_recv_request invalid read_size.\n");
             abort();
         }
-        buf = malloc(len);
+        buf = (uint8_t *)malloc(len);
         memset(buf, 0, len);
         memcpy_from_queue(s, buf, queue_idx, desc_idx, sizeof(h), len);
         ret = bs->write_async(bs, h.sector_num, buf, len / SECTOR_SIZE,
@@ -1067,7 +1067,7 @@ VIRTIODevice *virtio_block_init(VIRTIOBusDef bus, uint64_t mmio_addr, BlockDevic
     VIRTIOBlockDevice *s = {0};
     uint64_t nb_sectors = {0};
 
-    s = malloc(sizeof(*s));
+    s = (VIRTIOBlockDevice *)malloc(sizeof(*s));
     *s = (VIRTIOBlockDevice){0};
     if (virtio_init(&s->common, bus, mmio_addr,
                 2, 8, virtio_block_recv_request, VIRTIO_BLK_MAX_QUEUE_NUM) < 0) {
@@ -1084,14 +1084,14 @@ VIRTIODevice *virtio_block_init(VIRTIOBusDef bus, uint64_t mmio_addr, BlockDevic
 }
 
 void virtio_block_destroy(VIRTIODevice *s) {
-    VIRTIOBlockDevice *bs = (void*)s;
+    VIRTIOBlockDevice *bs = (VIRTIOBlockDevice *)s;
     virtio_ioeventfd_stop(s);
     virtio_irqfd_cleanup(&s->irq);
     free(bs->bs);
 }
 
 void* virtio_block_get_opaque(VIRTIODevice *s) {
-    VIRTIOBlockDevice *bs = (void*)s;
+    VIRTIOBlockDevice *bs = (VIRTIOBlockDevice *)s;
     return bs->bs->opaque;
 }
 
@@ -1126,7 +1126,7 @@ static int virtio_net_recv_request(VIRTIODevice *s, int queue_idx,
     if (memcpy_from_queue(s, &h, queue_idx, desc_idx, 0, s1->header_size) < 0)
         return 0;
     len = read_size - s1->header_size;
-    buf = malloc(len);
+    buf = (uint8_t *)malloc(len);
     memset(buf, 0, len);
     memcpy_from_queue(s, buf, queue_idx, desc_idx, s1->header_size, len);
     DEBUG("tx packet, queue idx： %d, len: %d\n", queue_idx, len);
@@ -1140,7 +1140,7 @@ static int virtio_net_recv_request(VIRTIODevice *s, int queue_idx,
 static bool virtio_net_can_write_packet(EthernetDevice *es)
 {
     bool ret = 0;
-    VIRTIODevice *s = es->device_opaque;
+    VIRTIODevice *s = (VIRTIODevice *)es->device_opaque;
     pthread_mutex_lock(&s->lock);
     QueueState *qs = &s->queue[0];
     uint16_t avail_idx = {0};
@@ -1159,7 +1159,7 @@ end:
 
 static void virtio_net_write_packet(EthernetDevice *es, const uint8_t *buf, int buf_len)
 {
-    VIRTIODevice *s = es->device_opaque;
+    VIRTIODevice *s = (VIRTIODevice *)es->device_opaque;
     pthread_mutex_lock(&s->lock);
 
     VIRTIONetDevice *s1 = (VIRTIONetDevice *)s;
@@ -1195,7 +1195,7 @@ VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, uint64_t mmio_addr, EthernetDevi
 {
     VIRTIONetDevice *s = NULL;
 
-    s = malloc(sizeof(*s));
+    s = (VIRTIONetDevice *)malloc(sizeof(*s));
     *s = (VIRTIONetDevice){0};
     if (virtio_init(&s->common, bus, mmio_addr,
                 1, 6 + 2, virtio_net_recv_request, VIRTIO_NET_MAX_QUEUE_NUM) < 0) {
@@ -1220,13 +1220,13 @@ VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, uint64_t mmio_addr, EthernetDevi
 }
 
 void virtio_net_destroy(VIRTIODevice *s) {
-    VIRTIONetDevice *es = (void*)s;
+    VIRTIONetDevice *es = (VIRTIONetDevice *)s;
     virtio_ioeventfd_stop(s);
     virtio_irqfd_cleanup(&s->irq);
     free(es->es);
 }
 
 void* virtio_net_get_opaque(VIRTIODevice *s) {
-    VIRTIONetDevice *es = (void*)s;
+    VIRTIONetDevice *es = (VIRTIONetDevice *)s;
     return es->es->opaque;
 }

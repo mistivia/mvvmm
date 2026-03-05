@@ -1,5 +1,5 @@
-CC := gcc
-CFLAGS := -x c -g -Wall -std=gnu99
+CC := g++
+CFLAGS := -g -Wall -std=gnu++17
 UNAME := $(shell uname -s)
 LDFLAGS := -g
 

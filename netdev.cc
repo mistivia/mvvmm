@@ -29,7 +29,7 @@ struct tap_net_ctx {
 static void
 write_packet_to_ether(EthernetDevice *net, const uint8_t *buf, int len)
 {
-    struct tap_net_ctx *ctx = net->opaque;
+    struct tap_net_ctx *ctx = (struct tap_net_ctx *)net->opaque;
     if (!ctx || ctx->fd < 0 || !buf || len <= 0) {
         return;
     }
@@ -67,8 +67,8 @@ timed_read(int fd, void *buf, size_t len, int timeout_ms)
 static void *
 tap_net_rx_thread(void *arg)
 {
-    EthernetDevice *net = arg;
-    struct tap_net_ctx *ctx = net->opaque;
+    EthernetDevice *net = (EthernetDevice *)arg;
+    struct tap_net_ctx *ctx = (struct tap_net_ctx *)net->opaque;
     uint8_t buf[TAP_BUF_SIZE] = {0};
 
     if (!ctx || ctx->fd < 0) {
@@ -120,7 +120,7 @@ mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
     int ret = -1;
 
     // Allocate TAP device context
-    ctx = malloc(sizeof(*ctx));
+    ctx = (struct tap_net_ctx *)malloc(sizeof(*ctx));
     if (!ctx) {
         fprintf(stderr, "failed to allocate TAP network context\n");
         return -1;
@@ -151,7 +151,7 @@ mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
     ctx->ifname[IFNAMSIZ - 1] = '\0';
 
     // Allocate and initialize EthernetDevice structure
-    net = malloc(sizeof(*net));
+    net = (EthernetDevice *)malloc(sizeof(*net));
     if (!net) {
         fprintf(stderr, "failed to allocate EthernetDevice structure\n");
         goto fail;
@@ -205,7 +205,7 @@ fail:
 }
 
 void mvvm_destroy_virtio_net(struct mvvm *self) {
-    struct tap_net_ctx *ctx = virtio_net_get_opaque(self->net);
+    struct tap_net_ctx *ctx = (struct tap_net_ctx *)virtio_net_get_opaque(self->net);
     pthread_mutex_lock(&ctx->lock);
     ctx->quit = 1;
     pthread_mutex_unlock(&ctx->lock);

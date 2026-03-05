@@ -71,7 +71,7 @@ static int timed_getchar(int fd, int timeout_ms, int *ch) {
 
 void* keyboard_thread_func(void* arg) {
     fprintf(stderr, "Press Ctrl+A & Ctrl+C to exit...\n");
-    struct mvvm *vm = arg;
+    struct mvvm *vm = (struct mvvm *)arg;
     set_terminal_raw_mode();
     int ch = 0;
     int escaped = 0;
@@ -189,9 +189,9 @@ parse_opts(int argc, char **argv)
         .kernel_path = NULL,
         .initrd_path = NULL,
         .disk_path = NULL,
-        .tap_ifname = NULL,
         .memory_size = 1024LL * 1024 * 1024,
-        .kernel_cmdline = DEFAULT_KERNEL_CMDLINE
+        .kernel_cmdline = DEFAULT_KERNEL_CMDLINE,
+        .tap_ifname = NULL
     };
 
     int opt = 0;

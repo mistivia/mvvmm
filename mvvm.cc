@@ -65,7 +65,7 @@ int init_cpu(int kvm_fd, int cpu_fd) {
         fprintf(stderr, "failed to set sregs.\n");
         return -1;
     }
-    cpuid = malloc(sizeof(*cpuid) + 
+    cpuid = (struct kvm_cpuid2 *)malloc(sizeof(*cpuid) + 
                    max_entries * sizeof(struct kvm_cpuid_entry2));
     cpuid->nent = max_entries;
     if (ioctl(kvm_fd, KVM_GET_SUPPORTED_CPUID, cpuid) < 0) {
@@ -133,7 +133,7 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char
     
     // Allocate guest memory
     struct guest_mem_map*
-        mem_map = malloc(sizeof(*mem_map));
+        mem_map = (struct guest_mem_map *)malloc(sizeof(*mem_map));
     if (!mem_map) {
         fprintf(stderr, "failed to allocate PhysMemoryMap\n");
         return -1;
@@ -320,17 +320,17 @@ load_initrd(struct mvvm *vm, struct boot_params *zeropage,
     return 0;
 }
 
-char *cmdline_concat(char *buf, const char *new) {
+char *cmdline_concat(char *buf, const char *new_arg) {
     char *ret = NULL;
     size_t n1 = strnlen(buf, 2000);
-    size_t n2 = strlen(new);
+    size_t n2 = strlen(new_arg);
     if (n1 + n2 >= 2000) {
         free(buf);
         return NULL;
     }
-    ret = malloc(n1 + n2 + 1);
+    ret = (char *)malloc(n1 + n2 + 1);
     memcpy(ret, buf, n1);
-    memcpy(ret+n1, new, n2);
+    memcpy(ret+n1, new_arg, n2);
     ret[n1+n2] = 0;
     free(buf);
     return ret;
@@ -346,6 +346,7 @@ mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
     uint32_t setup_size = 0;
     struct boot_params *zeropage = NULL;
     char *cmd_line = NULL;
+    char *cmdline_buf = NULL;
 
     if (map_file(kernel_path, &bz_image_size, &bz_image) < 0) {
         bz_image = NULL;
@@ -376,7 +377,7 @@ mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
     zeropage->hdr.cmd_line_ptr = 0x20000;
     // Copy command line
     cmd_line = (char *)(vm->mem_map->host_mem + 0x20000);
-    char *cmdline_buf = strdup(kernel_args);
+    cmdline_buf = strdup(kernel_args);
     if (vm->blk) {
         cmdline_buf = cmdline_concat(cmdline_buf, VIRTIO_BLK_CMDLINE);
         if (cmdline_buf == NULL) {
@@ -460,7 +461,7 @@ int mvvm_run(struct mvvm *vm) {
         exit(-1);
     }
     // Map the shared memory region
-    run = mmap(NULL, mmap_size, PROT_READ | PROT_WRITE, MAP_SHARED, 
+    run = (struct kvm_run *)mmap(NULL, mmap_size, PROT_READ | PROT_WRITE, MAP_SHARED, 
                vm->cpu_fd, 0);
     if (run == MAP_FAILED) {
         perror("mmap kvm_run");
@@ -490,7 +491,7 @@ int mvvm_run(struct mvvm *vm) {
             printf("KVM_EXIT_SHUTDOWN\n");
             ret = 1;
             goto exit_loop;
-        case KVM_EXIT_MMIO:
+        case KVM_EXIT_MMIO: {
             if (run->mmio.phys_addr >> 30 == 1024) {
                 virtiodev = vm->blk;
                 mmio_base_addr = VIRTIO_BLK_MMIO_ADDR;
@@ -513,6 +514,7 @@ int mvvm_run(struct mvvm *vm) {
                 *(uint32_t*)(run->mmio.data) = val;
             }
             break;
+        }
         default:
             printf("Unhandled exit reason: %d\n", run->exit_reason);
             ret = 1;
