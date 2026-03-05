@@ -3,6 +3,8 @@
 
 #pragma once
 
+namespace mvvmm {
+
 #define VIRTIO_BLK_MMIO_ADDR (1024LL * 1024 * 1024 * 1024)
 #define VIRTIO_BLK_IRQ 10
 #define VIRTIO_BLK_CMDLINE " virtio_mmio.device=4K@0x10000000000:10"
@@ -28,3 +30,5 @@
 #else
 #define DEBUG(...)
 #endif
+
+} // namespace mvvmm

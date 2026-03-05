@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+namespace mvvmm {
+
 void *worker_thread_fn(void* arg)
 {
     struct worker_thread *worker = (struct worker_thread *)arg;
@@ -100,3 +102,5 @@ void delete_thread_pool(struct thread_pool* pool) {
     free(pool->is_working);
     free(pool);
 }
+
+} // namespace mvvmm

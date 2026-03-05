@@ -42,6 +42,8 @@
 #include "config.h"
 #include "mvvm.h"
 
+namespace mvvmm {
+
 /* MMIO addresses - from the Linux kernel */
 #define VIRTIO_MMIO_MAGIC_VALUE		    0x000
 #define VIRTIO_MMIO_VERSION		        0x004
@@ -1230,3 +1232,5 @@ void* virtio_net_get_opaque(VIRTIODevice *s) {
     VIRTIONetDevice *es = (VIRTIONetDevice *)s;
     return es->es->opaque;
 }
+
+} // namespace mvvmm

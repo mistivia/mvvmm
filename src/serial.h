@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Mistivia <i@mistivia.com>
-
-#ifndef MVVMM_SERIAL_H_
-#define MVVMM_SERIAL_H_
-
+#pragma once
 #include <pthread.h>
 #include <stdint.h>
+
+struct kvm_run;
+
+namespace mvvmm {
 
 struct serial {
     uint8_t regs[8];
@@ -14,12 +15,11 @@ struct serial {
     pthread_cond_t rx_cond;
     int vm_fd;
 };
-struct kvm_run;
 struct mvvm;
 
 void serial_init(struct serial *self, int vmfd);
-void handle_serial(struct mvvm *vm, struct kvm_run *run);
+void handle_serial(struct mvvm *vm, struct ::kvm_run *run);
 void write_to_serial(struct mvvm *vm, char c);
 void serial_destroy(struct serial *self);
 
-#endif
+} // namespace mvvmm

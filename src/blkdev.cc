@@ -14,6 +14,8 @@
 #include "mvvm.h"
 #include "config.h"
 
+namespace mvvmm {
+
 #define SECTOR_SIZE 512
 
 // Context for block device operations using thread pool
@@ -216,3 +218,5 @@ void mvvm_destroy_virtio_blk(struct mvvm *self) {
     virtio_block_destroy(self->blk);
     free(self->blk);
 }
+
+} // namespace mvvmm

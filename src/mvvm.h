@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Mistivia <i@mistivia.com>
-
-#ifndef MVVM_H_
-#define MVVM_H_
-
+#pragma once
 #include <stdlib.h>
 
 #include "virtio.h"
 #include "serial.h"
+
+namespace mvvmm {
 
 struct guest_mem_map {
     void *host_mem;
@@ -36,4 +35,4 @@ void mvvm_destroy(struct mvvm *self);
 // must use with mvvmm guest module
 void mvvm_shutdown(struct mvvm *vm);
 
-#endif
+} // namespace mvvmm

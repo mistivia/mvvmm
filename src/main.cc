@@ -17,6 +17,8 @@
 #include "mvvm.h"
 #include "serial.h"
 
+namespace mvvmm {
+
 struct mvvm *g_vm = NULL;
 
 struct termios orig_termios;
@@ -296,7 +298,11 @@ print_usage(FILE *stream, const char *program_name)
             "  -h                Show this help message\n");
 }
 
-int main(int argc, char *argv[]) {
+} // namespace mvvmm
+
+using namespace mvvmm;
+
+int main(int argc, char **argv) {
     struct mvvm vm = {0};
     struct cmd_opts opts = parse_opts(argc, argv);
     signal(SIGINT, sigint_handler);

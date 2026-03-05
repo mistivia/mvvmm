@@ -22,11 +22,11 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-#ifndef VIRTIO_H
-#define VIRTIO_H
-
+#pragma once
 #include <stdint.h>
 #include <stdbool.h>
+
+namespace mvvmm {
 
 typedef uint64_t virtio_phys_addr_t;
 
@@ -116,4 +116,4 @@ VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, uint64_t mmio_addr, EthernetDevi
 void virtio_net_destroy(VIRTIODevice *s);
 void* virtio_net_get_opaque(VIRTIODevice *s);
 
-#endif /* VIRTIO_H */
+} // namespace mvvmm

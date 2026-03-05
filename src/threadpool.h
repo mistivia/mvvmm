@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Mistivia <i@mistivia.com>
-
-#ifndef MVVMM_THREADPOOL_H_
-#define MVVMM_THREADPOOL_H_
-
+#pragma once
 #include <stdbool.h>
 #include <pthread.h>
+
+namespace mvvmm {
 
 struct thread_pool {
     struct worker_thread **workers;
@@ -33,4 +32,4 @@ thread_pool_run(struct thread_pool *self, void* (*task_fn)(void*), void *arg);
 
 void delete_thread_pool(struct thread_pool *self);
 
-#endif
+} // namespace mvvmm

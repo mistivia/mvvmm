@@ -15,6 +15,8 @@
 
 #include "mvvm.h"
 
+namespace mvvmm {
+
 static inline void clear_intr(struct serial *self) {
     self->regs[2] = 0b0001;
 }
@@ -170,3 +172,5 @@ void serial_destroy(struct serial *self) {
     pthread_mutex_destroy(&self->rx_lock);
     pthread_cond_destroy(&self->rx_cond);
 }
+
+} // namespace mvvmm

@@ -24,6 +24,8 @@
 #include "serial.h"
 #include "virtio.h"
 
+namespace mvvmm {
+
 static void set_flat_mode(struct kvm_segment *seg) {
     seg->base = 0;
     seg->limit = 0xffffffff;
@@ -535,3 +537,5 @@ void mvvm_shutdown(struct mvvm *vm) {
     irq.level = 0;
     ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq);
 }
+
+} // namespace mvvmm

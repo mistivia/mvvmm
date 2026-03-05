@@ -18,6 +18,8 @@
 #include "virtio.h"
 #include "config.h"
 
+namespace mvvmm {
+
 struct tap_net_ctx {
     int fd;
     char ifname[IFNAMSIZ];
@@ -215,3 +217,5 @@ void mvvm_destroy_virtio_net(struct mvvm *self) {
     virtio_net_destroy(self->net);
     free(self->net);
 }
+
+} // namespace mvvmm
