@@ -379,7 +379,7 @@ static int memcpy_to_from_queue(VIRTIODevice *s, uint8_t *buf,
         }
         if ((desc.flags & VRING_DESC_F_WRITE) != f_write_flag)
             return -1;
-        if (offset < desc.len)
+        if (offset < (int)desc.len)
             break;
         if (!(desc.flags & VRING_DESC_F_NEXT))
             return -1;
@@ -406,7 +406,7 @@ static int memcpy_to_from_queue(VIRTIODevice *s, uint8_t *buf,
             break;
         offset += l;
         buf += l;
-        if (offset == desc.len) {
+        if (offset == (int)desc.len) {
             if (!(desc.flags & VRING_DESC_F_NEXT))
                 return -1;
             desc_idx = desc.next;

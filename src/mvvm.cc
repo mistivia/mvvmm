@@ -311,7 +311,7 @@ load_initrd(struct mvvm *vm, struct boot_params *zeropage,
         fprintf(stderr, "failed to load initrd.\n");
         return -1;
     }
-    memcpy(vm->mem_map->host_mem + initrd_addr, initrd, st.st_size);
+    memcpy((uint8_t *)vm->mem_map->host_mem + initrd_addr, initrd, st.st_size);
     zeropage->hdr.ramdisk_image = initrd_addr;
     zeropage->hdr.ramdisk_size = st.st_size;
     // cleanup
@@ -365,9 +365,9 @@ mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
         goto end;
     }
     // Setup boot parameters at 0x10000
-    zeropage = (struct boot_params *)(vm->mem_map->host_mem + 0x10000);
+    zeropage = (struct boot_params *)((uint8_t *)vm->mem_map->host_mem + 0x10000);
     memset(zeropage, 0, sizeof(*zeropage));
-    memcpy(&zeropage->hdr, bz_image+0x01f1, sizeof(zeropage->hdr));
+    memcpy(&zeropage->hdr, (uint8_t *)bz_image + 0x01f1, sizeof(zeropage->hdr));
     // Setup E820 memory map
     setup_e820_map(vm, zeropage);
     // Setup kernel loader info
@@ -376,7 +376,7 @@ mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
     zeropage->hdr.vid_mode = 0xFFFF;
     zeropage->hdr.cmd_line_ptr = 0x20000;
     // Copy command line
-    cmd_line = (char *)(vm->mem_map->host_mem + 0x20000);
+    cmd_line = (char *)((uint8_t *)vm->mem_map->host_mem + 0x20000);
     cmdline_buf = strdup(kernel_args);
     if (vm->blk) {
         cmdline_buf = cmdline_concat(cmdline_buf, VIRTIO_BLK_CMDLINE);
@@ -406,7 +406,7 @@ mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
     }
     // Copy protected mode kernel to 1MB
     setup_size = (zeropage->hdr.setup_sects + 1) * 512;
-    memcpy(vm->mem_map->host_mem + 0x100000,
+    memcpy((uint8_t *)vm->mem_map->host_mem + 0x100000,
            (char *)bz_image + setup_size,
            bz_image_size - setup_size);
     // cleanup
