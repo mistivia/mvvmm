@@ -31,7 +31,7 @@ struct async_io_req {
     uint64_t offset;
     uint8_t *buf;
     size_t count;
-    BlockDeviceCompletionFunc *cb;
+    block_device_comp_func *cb;
     void *opaque;
     int is_write;
 };
@@ -72,7 +72,7 @@ block_io_worker_fn(void *arg)
 
 // Get total sector count (synchronous operation)
 static int64_t
-block_get_sector_count(BlockDevice *bs)
+block_get_sector_count(block_device *bs)
 {
     struct block_device_ctx *ctx = (struct block_device_ctx *)bs->opaque;
     return ctx->size / SECTOR_SIZE;
@@ -80,8 +80,8 @@ block_get_sector_count(BlockDevice *bs)
 
 // Asynchronous read operation using thread pool
 static int
-block_read_async(BlockDevice *bs, uint64_t sector_num, uint8_t *buf, int n,
-                 BlockDeviceCompletionFunc *cb, struct blk_io_callback_arg *opaque)
+block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf, int n,
+                 block_device_comp_func *cb, struct blk_io_callback_arg *opaque)
 {
     struct block_device_ctx *ctx = (struct block_device_ctx *)bs->opaque;
     struct async_io_req *req = NULL;
@@ -109,8 +109,8 @@ block_read_async(BlockDevice *bs, uint64_t sector_num, uint8_t *buf, int n,
 
 // Asynchronous write operation using thread pool
 static int
-block_write_async(BlockDevice *bs, uint64_t sector_num, const uint8_t *buf,
-                  int n, BlockDeviceCompletionFunc *cb, struct blk_io_callback_arg *opaque)
+block_write_async(block_device *bs, uint64_t sector_num, const uint8_t *buf,
+                  int n, block_device_comp_func *cb, struct blk_io_callback_arg *opaque)
 {
     struct block_device_ctx *ctx = (struct block_device_ctx *)bs->opaque;
     struct async_io_req *req = NULL;;
@@ -142,10 +142,10 @@ int
 mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
 {
     struct block_device_ctx *ctx = NULL;
-    BlockDevice *bs = NULL;
-    struct IRQSignal irq = {0};
+    block_device *bs = NULL;
+    struct irq_signal irq = {0};
     struct stat st = {0};
-    VIRTIOBusDef bus = {0};
+    virtio_bus_def bus = {0};
     int ret = -1;
     // Allocate block device context
     ctx = (struct block_device_ctx *)malloc(sizeof(*ctx));
@@ -171,10 +171,10 @@ mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
         fprintf(stderr, "failed to create thread pool\n");
         goto fail;
     }
-    // Allocate and initialize BlockDevice structure
-    bs = (BlockDevice *)malloc(sizeof(*bs));
+    // Allocate and initialize block_device structure
+    bs = (block_device *)malloc(sizeof(*bs));
     if (!bs) {
-        fprintf(stderr, "failed to allocate BlockDevice structure\n");
+        fprintf(stderr, "failed to allocate block_device structure\n");
         goto fail;
     }
 

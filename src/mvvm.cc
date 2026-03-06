@@ -440,7 +440,7 @@ int mvvm_run(struct mvvm *vm) {
     int ret = 0;
     int mmap_size = 0;
     struct kvm_run *run = NULL;
-    VIRTIODevice *virtiodev = NULL;
+    virtio_device *virtiodev = NULL;
     uint64_t mmio_base_addr = 0;
 
     mmap_size = ioctl(vm->kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);

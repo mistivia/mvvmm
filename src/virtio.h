@@ -30,40 +30,40 @@ namespace mvvmm {
 
 typedef uint64_t virtio_phys_addr_t;
 
-struct IRQSignal {
+struct irq_signal {
     int vmfd;
     int irqline;
     int irqfd;  /* eventfd for irqfd mechanism */
 };
-typedef struct IRQSignal IRQSignal;
+typedef struct irq_signal irq_signal;
 
 typedef struct {
     struct guest_mem_map *mem_map;
-    IRQSignal irq;
-} VIRTIOBusDef;
+    irq_signal irq;
+} virtio_bus_def;
 
 /* irqfd functions */
-int virtio_irqfd_init(IRQSignal *irq);
-void virtio_irqfd_cleanup(IRQSignal *irq);
+int virtio_irqfd_init(irq_signal *irq);
+void virtio_irqfd_cleanup(irq_signal *irq);
 
-typedef struct VIRTIODevice VIRTIODevice; 
+typedef struct virtio_device virtio_device; 
 
-uint32_t virtio_mmio_read(VIRTIODevice *s, uint32_t offset1, int size);
-void virtio_mmio_write(VIRTIODevice *s, uint32_t offset,
+uint32_t virtio_mmio_read(virtio_device *s, uint32_t offset1, int size);
+void virtio_mmio_write(virtio_device *s, uint32_t offset,
                        uint32_t val, int size);
 
-void virtio_set_debug(VIRTIODevice *s, int debug_flags);
+void virtio_set_debug(virtio_device *s, int debug_flags);
 
 /* block device */
 struct blk_io_callback_arg;
-typedef void BlockDeviceCompletionFunc(struct blk_io_callback_arg *callback_arg, int ret);
+typedef void block_device_comp_func(struct blk_io_callback_arg *callback_arg, int ret);
 
 struct disk_image {
     int fd;
     uint64_t size;
 };
 
-typedef struct BlockDevice BlockDevice;
+typedef struct block_device block_device;
 
 typedef struct {
     uint32_t type;
@@ -71,49 +71,49 @@ typedef struct {
     int write_size;
     int queue_idx;
     int desc_idx;
-} BlockRequest;
+} block_request;
 
 struct blk_io_callback_arg {
-    VIRTIODevice *s;
-    BlockRequest req;
+    virtio_device *s;
+    block_request req;
 };
 
-struct BlockDevice {
-    int64_t (*get_sector_count)(BlockDevice *bs);
-    int (*read_async)(BlockDevice *bs,
+struct block_device {
+    int64_t (*get_sector_count)(block_device *bs);
+    int (*read_async)(block_device *bs,
                       uint64_t sector_num, uint8_t *buf, int n, // n is sector number
-                      BlockDeviceCompletionFunc *cb, struct blk_io_callback_arg *cbarg);
-    int (*write_async)(BlockDevice *bs,
+                      block_device_comp_func *cb, struct blk_io_callback_arg *cbarg);
+    int (*write_async)(block_device *bs,
                        uint64_t sector_num, const uint8_t *buf, int n, // n is sector nubmer
-                       BlockDeviceCompletionFunc *cb, struct blk_io_callback_arg *cbarg);
+                       block_device_comp_func *cb, struct blk_io_callback_arg *cbarg);
     void *opaque;
 };
 
-VIRTIODevice *virtio_block_init(VIRTIOBusDef bus, uint64_t mmio_addr, BlockDevice *bs);
+virtio_device *virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, block_device *bs);
 
-void virtio_block_destroy(VIRTIODevice *s);
-void* virtio_block_get_opaque(VIRTIODevice *s);
+void virtio_block_destroy(virtio_device *s);
+void* virtio_block_get_opaque(virtio_device *s);
 
 /* network device */
-struct EthernetDevice;
-typedef struct EthernetDevice EthernetDevice; 
+struct ethernet_device;
+typedef struct ethernet_device ethernet_device; 
 
-struct EthernetDevice {
+struct ethernet_device {
     uint8_t mac_addr[6]; /* mac address of the interface */
-    void (*write_packet_to_ether)(EthernetDevice *net,
+    void (*write_packet_to_ether)(ethernet_device *net,
                                   const uint8_t *buf, int len);
     void *opaque;
     /* the following is set by the device */
     void *device_opaque;
-    bool (*can_write_packet_to_virtio)(EthernetDevice *net);
-    void (*write_packet_to_virtio)(EthernetDevice *net,
+    bool (*can_write_packet_to_virtio)(ethernet_device *net);
+    void (*write_packet_to_virtio)(ethernet_device *net,
                                 const uint8_t *buf, int len);
 
 };
 
-VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, uint64_t mmio_addr, EthernetDevice *es);
+virtio_device *virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, ethernet_device *es);
 
-void virtio_net_destroy(VIRTIODevice *s);
-void* virtio_net_get_opaque(VIRTIODevice *s);
+void virtio_net_destroy(virtio_device *s);
+void* virtio_net_get_opaque(virtio_device *s);
 
 } // namespace mvvmm

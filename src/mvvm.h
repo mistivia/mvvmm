@@ -19,8 +19,8 @@ struct mvvm {
     int cpu_fd;
     struct guest_mem_map *mem_map;
     std::unique_ptr<mvvmm::serial> serial;
-    VIRTIODevice *blk;
-    VIRTIODevice *net;
+    virtio_device *blk;
+    virtio_device *net;
     int quit;
     uint8_t power_cmd;
 };
