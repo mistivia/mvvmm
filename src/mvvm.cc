@@ -436,22 +436,7 @@ static int handle_power(struct mvvm *vm, struct kvm_run *run) {
     return 0;
 }
 
-static void mask_sigterm() {
-    sigset_t set;
-    sigemptyset(&set);
-    sigaddset(&set, SIGTERM);
-    pthread_sigmask(SIG_BLOCK, &set, NULL);
-}
-
-static void unmask_sigterm() {
-    sigset_t set;
-    sigemptyset(&set);
-    sigaddset(&set, SIGTERM);
-    pthread_sigmask(SIG_UNBLOCK, &set, NULL);
-}
-
 int mvvm_run(struct mvvm *vm) {
-    mask_sigterm();
     int ret = 0;
     int mmap_size = 0;
     struct kvm_run *run = NULL;
@@ -471,13 +456,11 @@ int mvvm_run(struct mvvm *vm) {
         exit(-1);
     }
     while (1) {
-        unmask_sigterm();
         if (ioctl(vm->cpu_fd, KVM_RUN, 0) < 0) {
             if (errno == EINTR) continue;
             perror("KVM_RUN");
             break;
         }
-        mask_sigterm();
         switch (run->exit_reason) {
         case KVM_EXIT_IO:
             if (run->io.port >= 0x3f8 && run->io.port <= 0x3ff) {

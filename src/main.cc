@@ -10,7 +10,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <poll.h>
-
+#include <thread>
 #include <termios.h>
 
 #include "config.h"
@@ -305,7 +305,6 @@ using namespace mvvmm;
 int main(int argc, char **argv) {
     struct mvvm vm = {0};
     struct cmd_opts opts = parse_opts(argc, argv);
-    signal(SIGINT, sigint_handler);
     vm = (struct mvvm){0};
     if (mvvm_init(&vm, opts.memory_size, opts.disk_path, opts.tap_ifname) < 0) {
         return -1;
@@ -319,8 +318,12 @@ int main(int argc, char **argv) {
         return 1;
     }
     g_vm = &vm;
+    signal(SIGINT, sigint_handler);
     signal(SIGTERM, sigterm_handler);
-    mvvm_run(&vm);
+    std::thread vm_th{[&]() {
+        mvvm_run(&vm);
+    }};
+    vm_th.join();
     vm.quit = true;
     pthread_join(keyboard_thread, NULL);
     mvvm_destroy(&vm);
