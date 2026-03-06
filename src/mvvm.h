@@ -18,7 +18,7 @@ struct mvvm {
     int vm_fd;
     int cpu_fd;
     struct guest_mem_map *mem_map;
-    struct serial serial;
+    std::unique_ptr<mvvmm::serial> serial;
     VIRTIODevice *blk;
     VIRTIODevice *net;
     int quit;

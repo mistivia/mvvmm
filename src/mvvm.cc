@@ -4,6 +4,7 @@
 #include "mvvm.h"
 
 #include <errno.h>
+#include <memory>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -195,7 +196,7 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char
         return -1;
     }
     // Initialize serial port
-    serial_init(&self->serial, self->vm_fd);
+    self->serial = std::make_unique<serial>(self);
     // init virtio block device
     if (disk != NULL) {
         if (mvvm_init_virtio_blk(self, disk) < 0) {
@@ -480,7 +481,7 @@ int mvvm_run(struct mvvm *vm) {
         switch (run->exit_reason) {
         case KVM_EXIT_IO:
             if (run->io.port >= 0x3f8 && run->io.port <= 0x3ff) {
-                handle_serial(vm, run);
+                vm->serial->handle_io_event(run);
             }
             if (run->io.port == 0x300) {
                 ret = handle_power(vm, run);

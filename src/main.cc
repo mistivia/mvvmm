@@ -88,16 +88,16 @@ void* keyboard_thread_func(void* arg) {
             if (ch == 0x03) {
                 kill(getpid(), SIGINT);
             } else if (ch == 0x01) {
-                write_to_serial(vm, (char)0x01);
+                vm->serial->write((char)0x01);
             } else {
-                write_to_serial(vm, (char)0x01);
-                write_to_serial(vm, (char)ch);
+                vm->serial->write((char)0x01);
+                vm->serial->write((char)ch);
             }
         } else {
             if (ch == 0x01) {
                 escaped = 1;
             } else {
-                write_to_serial(vm, (char)ch);
+                vm->serial->write((char)ch);
             }
         }
     }
