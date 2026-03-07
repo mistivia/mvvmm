@@ -235,8 +235,3 @@ Reboot is not supported; restart the virtual machine process if you need to rebo
 
 <img width="811" height="714" alt="image" src="https://github.com/user-attachments/assets/92bc0333-1d8b-461b-aba3-5871be9746d7" />
 
-## License
-
-All files are licensed under GPLv3 if not specified otherwise.
-
-`virtio.c` and `virtio.h` (ported from TinyEMU) are licensed under MIT license.
