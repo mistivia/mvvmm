@@ -15,35 +15,50 @@
  */
 
 #pragma once
-#include <stdbool.h>
-#include <pthread.h>
+
+#include <functional>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 namespace mvvmm {
 
-struct thread_pool {
-    struct worker_thread **workers;
-    bool *is_working;
-    int worker_num;
-    pthread_mutex_t lock;
-    int quit;
+class worker_thread;
+
+class thread_pool {
+public:
+    static thread_pool* make_instance(int thread_num);
+    int run(std::function<void(void)> &&m_task);
+    ~thread_pool();
+private:
+    explicit thread_pool() = default;
+    thread_pool(const thread_pool &) = delete;
+    thread_pool& operator=(const thread_pool &) = delete;
+    worker_thread **m_workers = nullptr;
+    bool *m_is_working = nullptr;
+    int m_worker_num = -1;
+    std::mutex m_lock;
+    bool m_quit = false;
+    friend class worker_thread;
 };
 
-struct worker_thread {
-    void* (*task_fn)(void*);
-    void *arg;
-    pthread_t th;
-    pthread_mutex_t lock;
-    pthread_cond_t cond;
+class worker_thread {
+private:
+    static worker_thread* make_instance(struct thread_pool *pool, int id);
+    void run();
+    
+    explicit worker_thread() = default;
+    worker_thread(const worker_thread &) = delete;
+    worker_thread& operator=(const worker_thread &) = delete;
 
-    struct thread_pool *pool;
-    int id;
+    std::function<void(void)> m_task;
+    bool m_has_task;
+    std::thread m_th;
+    std::mutex m_lock;
+    std::condition_variable m_cond;
+    thread_pool *m_pool = nullptr;
+    int m_id = -1;
+    friend class thread_pool;
 };
-
-struct thread_pool* new_thread_pool(int thread_num);
-
-int
-thread_pool_run(struct thread_pool *self, void* (*task_fn)(void*), void *arg);
-
-void delete_thread_pool(struct thread_pool *self);
 
 } // namespace mvvmm

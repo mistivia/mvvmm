@@ -13,6 +13,8 @@ build/
 *.cmd
 *.mod.c
 *.mod
+task.md
+REVIEW.md
 Module.symvers
 modules.order
 initramfs/

@@ -21,7 +21,7 @@ $(BUILD_DIR)/%.o: src/%.cc
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
 test: $(TARGET)
-	./$(TARGET) -k ./vmlinuz -i ./initrd -m 4g -d disk.img -t vm0 2>$(BUILD_DIR)/mvvmm.err
+	sudo ./$(TARGET) -k ./vmlinuz -i ./initrd -m 4g -d disk.img -t vm0 2>$(BUILD_DIR)/mvvmm.err
 
 bear:
 	make clean

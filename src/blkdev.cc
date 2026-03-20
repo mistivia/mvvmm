@@ -32,11 +32,13 @@ namespace mvvmm {
 
 #define SECTOR_SIZE 512
 
+class thread_pool;
 // Context for block device operations using thread pool
+
 struct block_device_ctx {
     int fd;
     uint64_t size;
-    struct thread_pool *pool;
+    thread_pool *pool;
 };
 
 // Request structure passed to worker threads for async I/O
@@ -113,7 +115,7 @@ block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf, int n,
     req->opaque = opaque;
     req->is_write = 0;
 
-    if (thread_pool_run(ctx->pool, block_io_worker_fn, req) < 0) {
+    if (ctx->pool->run([req]() { block_io_worker_fn(req); }) < 0) {
         free(req);
         return -1;
     }
@@ -143,7 +145,7 @@ block_write_async(block_device *bs, uint64_t sector_num, const uint8_t *buf,
     req->opaque = opaque;
     req->is_write = 1;
 
-    if (thread_pool_run(ctx->pool, block_io_worker_fn, req) < 0) {
+    if (ctx->pool->run([req]() { block_io_worker_fn(req); }) < 0) {
         free(req);
         return -1;
     }
@@ -180,7 +182,7 @@ mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     }
     ctx->size = st.st_size;
     // Create thread pool for async I/O operations
-    ctx->pool = new_thread_pool(VIRTIO_BLK_MAX_QUEUE_NUM);
+    ctx->pool = thread_pool::make_instance(VIRTIO_BLK_MAX_QUEUE_NUM);
     if (!ctx->pool) {
         fprintf(stderr, "failed to create thread pool\n");
         goto fail;
@@ -227,7 +229,7 @@ fail:
 
 void mvvm_destroy_virtio_blk(struct mvvm *self) {
     struct block_device_ctx *ctx = (struct block_device_ctx *)virtio_block_get_opaque(self->blk);
-    delete_thread_pool(ctx->pool);
+    delete ctx->pool;
     free(ctx);
     virtio_block_destroy(self->blk);
     free(self->blk);
