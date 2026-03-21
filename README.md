@@ -23,7 +23,6 @@ A lightweight, hackable Virtual Machine Monitor (VMM) built on KVM. Designed for
 - [Running the VM](#running-the-vm)
 - [Power Management](#power-management)
 - [Screenshot](#screenshot)
-- [License](#license)
 
 ## Quick Start
 
