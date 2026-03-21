@@ -1,6 +1,6 @@
 /*
  * VIRTIO device
- * 
+ *
  * Copyright (c) 2016 Fabrice Bellard
  * Copyright (c) 2026 Mistivia <i@mistivia.com>
  *
@@ -45,30 +45,30 @@
 namespace mvvmm {
 
 /* MMIO addresses - from the Linux kernel */
-constexpr int VIRTIO_MMIO_MAGIC_VALUE           = 0x000;
-constexpr int VIRTIO_MMIO_VERSION               = 0x004;
-constexpr int VIRTIO_MMIO_DEVICE_ID             = 0x008;
-constexpr int VIRTIO_MMIO_VENDOR_ID             = 0x00c;
-constexpr int VIRTIO_MMIO_DEVICE_FEATURES       = 0x010;
-constexpr int VIRTIO_MMIO_DEVICE_FEATURES_SEL   = 0x014;
-constexpr int VIRTIO_MMIO_DRIVER_FEATURES       = 0x020;
-constexpr int VIRTIO_MMIO_DRIVER_FEATURES_SEL   = 0x024;
-constexpr int VIRTIO_MMIO_QUEUE_SEL             = 0x030;
-constexpr int VIRTIO_MMIO_QUEUE_NUM_MAX         = 0x034;
-constexpr int VIRTIO_MMIO_QUEUE_NUM             = 0x038;
-constexpr int VIRTIO_MMIO_QUEUE_READY           = 0x044;
-constexpr int VIRTIO_MMIO_QUEUE_NOTIFY          = 0x050;
-constexpr int VIRTIO_MMIO_INTERRUPT_STATUS      = 0x060;
-constexpr int VIRTIO_MMIO_INTERRUPT_ACK         = 0x064;
-constexpr int VIRTIO_MMIO_STATUS                = 0x070;
-constexpr int VIRTIO_MMIO_QUEUE_DESC_LOW        = 0x080;
-constexpr int VIRTIO_MMIO_QUEUE_DESC_HIGH       = 0x084;
-constexpr int VIRTIO_MMIO_QUEUE_AVAIL_LOW       = 0x090;
-constexpr int VIRTIO_MMIO_QUEUE_AVAIL_HIGH      = 0x094;
-constexpr int VIRTIO_MMIO_QUEUE_USED_LOW        = 0x0a0;
-constexpr int VIRTIO_MMIO_QUEUE_USED_HIGH       = 0x0a4;
-constexpr int VIRTIO_MMIO_CONFIG_GENERATION     = 0x0fc;
-constexpr int VIRTIO_MMIO_CONFIG                = 0x100;
+constexpr int VIRTIO_MMIO_MAGIC_VALUE = 0x000;
+constexpr int VIRTIO_MMIO_VERSION = 0x004;
+constexpr int VIRTIO_MMIO_DEVICE_ID = 0x008;
+constexpr int VIRTIO_MMIO_VENDOR_ID = 0x00c;
+constexpr int VIRTIO_MMIO_DEVICE_FEATURES = 0x010;
+constexpr int VIRTIO_MMIO_DEVICE_FEATURES_SEL = 0x014;
+constexpr int VIRTIO_MMIO_DRIVER_FEATURES = 0x020;
+constexpr int VIRTIO_MMIO_DRIVER_FEATURES_SEL = 0x024;
+constexpr int VIRTIO_MMIO_QUEUE_SEL = 0x030;
+constexpr int VIRTIO_MMIO_QUEUE_NUM_MAX = 0x034;
+constexpr int VIRTIO_MMIO_QUEUE_NUM = 0x038;
+constexpr int VIRTIO_MMIO_QUEUE_READY = 0x044;
+constexpr int VIRTIO_MMIO_QUEUE_NOTIFY = 0x050;
+constexpr int VIRTIO_MMIO_INTERRUPT_STATUS = 0x060;
+constexpr int VIRTIO_MMIO_INTERRUPT_ACK = 0x064;
+constexpr int VIRTIO_MMIO_STATUS = 0x070;
+constexpr int VIRTIO_MMIO_QUEUE_DESC_LOW = 0x080;
+constexpr int VIRTIO_MMIO_QUEUE_DESC_HIGH = 0x084;
+constexpr int VIRTIO_MMIO_QUEUE_AVAIL_LOW = 0x090;
+constexpr int VIRTIO_MMIO_QUEUE_AVAIL_HIGH = 0x094;
+constexpr int VIRTIO_MMIO_QUEUE_USED_LOW = 0x0a0;
+constexpr int VIRTIO_MMIO_QUEUE_USED_HIGH = 0x0a4;
+constexpr int VIRTIO_MMIO_CONFIG_GENERATION = 0x0fc;
+constexpr int VIRTIO_MMIO_CONFIG = 0x100;
 
 #define MAX_QUEUE 2
 #define MAX_CONFIG_SPACE_SIZE 256
@@ -83,9 +83,9 @@ typedef struct {
     bool manual_recv; /* if true, the device_recv() callback is not called */
 } QueueState;
 
-#define VRING_DESC_F_NEXT    1
-#define VRING_DESC_F_WRITE    2
-#define VRING_DESC_F_INDIRECT    4
+#define VRING_DESC_F_NEXT 1
+#define VRING_DESC_F_WRITE 2
+#define VRING_DESC_F_INDIRECT 4
 
 typedef struct {
     uint64_t addr;
@@ -96,9 +96,8 @@ typedef struct {
 
 /* return < 0 to stop the notification (it must be manually restarted
    later), 0 if OK */
-typedef int virtio_deviceRecvFunc(virtio_device *s1, int queue_idx,
-                                 int desc_idx, int read_size,
-                                 int write_size);
+typedef int virtio_deviceRecvFunc(virtio_device *s1, int queue_idx, int desc_idx, int read_size,
+                                  int write_size);
 
 /* return NULL if no RAM at this address. The mapping is valid for one page */
 typedef uint8_t *VIRTIOGetRAMPtrFunc(virtio_device *s, virtio_phys_addr_t paddr);
@@ -124,34 +123,34 @@ struct virtio_device {
     uint8_t config_space[MAX_CONFIG_SPACE_SIZE];
     pthread_mutex_t lock;
     int max_queue_num;
-    uint64_t mmio_addr;                     /* MMIO base address */
-    int ioeventfd[MAX_QUEUE];               /* eventfd for each queue notify */
-    pthread_t ioeventfd_thread;             /* thread polling ioeventfds */
-    bool ioeventfd_enabled;                 /* whether ioeventfd is active */
+    uint64_t mmio_addr;         /* MMIO base address */
+    int ioeventfd[MAX_QUEUE];   /* eventfd for each queue notify */
+    pthread_t ioeventfd_thread; /* thread polling ioeventfds */
+    bool ioeventfd_enabled;     /* whether ioeventfd is active */
 };
 
 static void queue_notify(virtio_device *s, int queue_idx);
 static int virtio_ioeventfd_start(virtio_device *s);
 static void virtio_ioeventfd_stop(virtio_device *s);
 
-static void put_le32(void* ptr, uint32_t val)
+static void put_le32(void *ptr, uint32_t val)
 {
     if (ptr == NULL) {
         return;
     }
-    uint8_t* const p = (uint8_t* const)ptr;
+    uint8_t *const p = (uint8_t *const)ptr;
     p[0] = (uint8_t)(val & 0xFF);
     p[1] = (uint8_t)((val >> 8) & 0xFF);
     p[2] = (uint8_t)((val >> 16) & 0xFF);
     p[3] = (uint8_t)((val >> 24) & 0xFF);
 }
 
-static void put_le16(void* ptr, uint16_t val)
+static void put_le16(void *ptr, uint16_t val)
 {
     if (ptr == NULL) {
         return;
     }
-    uint8_t* const p = (uint8_t* const)ptr;
+    uint8_t *const p = (uint8_t *const)ptr;
     p[0] = (uint8_t)(val & 0xFF);
     p[1] = (uint8_t)((val >> 8) & 0xFF);
 }
@@ -161,10 +160,8 @@ static uint32_t get_le32(void *ptr)
     if (ptr == NULL) {
         return 0;
     }
-    const uint8_t* const p = (const uint8_t* const)ptr;
-    return ((uint32_t)p[0]) |
-           ((uint32_t)p[1] << 8) |
-           ((uint32_t)p[2] << 16) |
+    const uint8_t *const p = (const uint8_t *const)ptr;
+    return ((uint32_t)p[0]) | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
            ((uint32_t)p[3] << 24);
 }
 
@@ -173,9 +170,8 @@ static uint16_t get_le16(void *ptr)
     if (ptr == NULL) {
         return 0;
     }
-    const uint8_t* const p = (const uint8_t* const)ptr;
-    return ((uint16_t)p[0]) |
-           ((uint16_t)p[1] << 8);
+    const uint8_t *const p = (const uint8_t *const)ptr;
+    return ((uint16_t)p[0]) | ((uint16_t)p[1] << 8);
 }
 
 static void virtio_reset(virtio_device *s)
@@ -186,7 +182,7 @@ static void virtio_reset(virtio_device *s)
     s->queue_sel = 0;
     s->device_features_sel = 0;
     s->int_status = 0;
-    for(i = 0; i < MAX_QUEUE; i++) {
+    for (i = 0; i < MAX_QUEUE; i++) {
         QueueState *qs = &s->queue[i];
         qs->avail_addr = 0;
         qs->desc_addr = 0;
@@ -197,7 +193,8 @@ static void virtio_reset(virtio_device *s)
     }
 }
 
-static uint8_t* guest_addr_to_host_addr(virtio_device *s, uint64_t guest_addr) {
+static uint8_t *guest_addr_to_host_addr(virtio_device *s, uint64_t guest_addr)
+{
     struct guest_mem_map *mem_map = s->mem_map;
     if (guest_addr > mem_map->size) {
         return NULL;
@@ -205,9 +202,8 @@ static uint8_t* guest_addr_to_host_addr(virtio_device *s, uint64_t guest_addr) {
     return (uint8_t *)mem_map->host_mem + guest_addr;
 }
 
-static int virtio_init(virtio_device *s, virtio_bus_def bus, uint64_t mmio_addr,
-                        uint32_t device_id, int config_space_size,
-                        virtio_deviceRecvFunc *device_recv, int max_queue_num)
+static int virtio_init(virtio_device *s, virtio_bus_def bus, uint64_t mmio_addr, uint32_t device_id,
+                       int config_space_size, virtio_deviceRecvFunc *device_recv, int max_queue_num)
 {
     memset(s, 0, sizeof(*s));
 
@@ -235,7 +231,8 @@ static int virtio_init(virtio_device *s, virtio_bus_def bus, uint64_t mmio_addr,
     }
     /* Initialize ioeventfd for queue notifications */
     if (virtio_ioeventfd_start(s) < 0) {
-        fprintf(stderr, "virtio_init: ioeventfd initialization failed, falling back to MMIO exits\n");
+        fprintf(stderr,
+                "virtio_init: ioeventfd initialization failed, falling back to MMIO exits\n");
         return -1;
     }
     return 0;
@@ -253,8 +250,7 @@ static uint16_t virtio_read16(virtio_device *s, virtio_phys_addr_t addr)
     return *(uint16_t *)ptr;
 }
 
-static void virtio_write16(virtio_device *s, virtio_phys_addr_t addr,
-                           uint16_t val)
+static void virtio_write16(virtio_device *s, virtio_phys_addr_t addr, uint16_t val)
 {
     uint8_t *ptr = NULL;
     if (addr & 1)
@@ -266,8 +262,7 @@ static void virtio_write16(virtio_device *s, virtio_phys_addr_t addr,
     std::atomic_thread_fence(std::memory_order_release);
 }
 
-static void virtio_write32(virtio_device *s, virtio_phys_addr_t addr,
-                           uint32_t val)
+static void virtio_write32(virtio_device *s, virtio_phys_addr_t addr, uint32_t val)
 {
     uint8_t *ptr = NULL;
     if (addr & 3)
@@ -279,12 +274,10 @@ static void virtio_write32(virtio_device *s, virtio_phys_addr_t addr,
     std::atomic_thread_fence(std::memory_order_release);
 }
 
-static inline int min_int(int a, int b) {
-    return a < b ? a : b;
-}
+static inline int min_int(int a, int b) { return a < b ? a : b; }
 
-static int virtio_memcpy_from_guest(virtio_device *s, uint8_t *buf,
-                                  virtio_phys_addr_t addr, int count)
+static int virtio_memcpy_from_guest(virtio_device *s, uint8_t *buf, virtio_phys_addr_t addr,
+                                    int count)
 {
     uint8_t *ptr = NULL;
     int l = {0};
@@ -303,8 +296,8 @@ static int virtio_memcpy_from_guest(virtio_device *s, uint8_t *buf,
     return 0;
 }
 
-static int virtio_memcpy_to_guest(virtio_device *s, virtio_phys_addr_t addr, 
-                                const uint8_t *buf, int count)
+static int virtio_memcpy_to_guest(virtio_device *s, virtio_phys_addr_t addr, const uint8_t *buf,
+                                  int count)
 {
     uint8_t *ptr = {0};
     int l = {0};
@@ -323,17 +316,14 @@ static int virtio_memcpy_to_guest(virtio_device *s, virtio_phys_addr_t addr,
     return 0;
 }
 
-static int get_desc(virtio_device *s, VIRTIODesc *desc,  
-                    int queue_idx, int desc_idx)
+static int get_desc(virtio_device *s, VIRTIODesc *desc, int queue_idx, int desc_idx)
 {
     QueueState *qs = &s->queue[queue_idx];
-    return virtio_memcpy_from_guest(s, (uint8_t *)desc, qs->desc_addr +
-                                  desc_idx * sizeof(VIRTIODesc),
-                                  sizeof(VIRTIODesc));
+    return virtio_memcpy_from_guest(
+        s, (uint8_t *)desc, qs->desc_addr + desc_idx * sizeof(VIRTIODesc), sizeof(VIRTIODesc));
 }
 
-static int memcpy_to_from_queue(virtio_device *s, uint8_t *buf,
-                                int queue_idx, int desc_idx,
+static int memcpy_to_from_queue(virtio_device *s, uint8_t *buf, int queue_idx, int desc_idx,
                                 int offset, int count, bool to_queue)
 {
     VIRTIODesc desc = {0};
@@ -350,7 +340,7 @@ static int memcpy_to_from_queue(virtio_device *s, uint8_t *buf,
     if (to_queue) {
         f_write_flag = VRING_DESC_F_WRITE;
         /* find the first write descriptor */
-        for(int i = 0;;i++) {
+        for (int i = 0;; i++) {
             if (i > 1024) {
                 fprintf(stderr, "memcpy_to_from_queue infinite loop1.\n");
                 return -1;
@@ -370,7 +360,7 @@ static int memcpy_to_from_queue(virtio_device *s, uint8_t *buf,
     }
 
     /* find the descriptor at offset */
-    for(int i = 0;;i++) {
+    for (int i = 0;; i++) {
         if (i > 1024) {
             fprintf(stderr, "memcpy_to_from_queue infinite loop2.\n");
             return -1;
@@ -389,7 +379,7 @@ static int memcpy_to_from_queue(virtio_device *s, uint8_t *buf,
         }
     }
 
-    for(int i = 0;;i++) {
+    for (int i = 0;; i++) {
         if (i > 1024) {
             fprintf(stderr, "memcpy_to_from_queue infinite loop1.\n");
             return -1;
@@ -420,23 +410,20 @@ static int memcpy_to_from_queue(virtio_device *s, uint8_t *buf,
     return 0;
 }
 
-static int memcpy_from_queue(virtio_device *s, void *buf,
-                             int queue_idx, int desc_idx,
-                             int offset, int count)
+static int memcpy_from_queue(virtio_device *s, void *buf, int queue_idx, int desc_idx, int offset,
+                             int count)
 {
-    return memcpy_to_from_queue(s, (uint8_t *)buf, queue_idx, desc_idx, offset, count,
-                                false);
+    return memcpy_to_from_queue(s, (uint8_t *)buf, queue_idx, desc_idx, offset, count, false);
 }
 
-static int memcpy_to_queue(virtio_device *s,
-                           int queue_idx, int desc_idx,
-                           int offset, const void *buf, int count)
+static int memcpy_to_queue(virtio_device *s, int queue_idx, int desc_idx, int offset,
+                           const void *buf, int count)
 {
-    return memcpy_to_from_queue(s, (uint8_t *)buf, queue_idx, desc_idx, offset,
-                                count, true);
+    return memcpy_to_from_queue(s, (uint8_t *)buf, queue_idx, desc_idx, offset, count, true);
 }
 
-static void set_irq(irq_signal irqsig, int level) {
+static void set_irq(irq_signal irqsig, int level)
+{
     struct kvm_irq_level irq = {0};
     irq.irq = irqsig.irqline;
     irq.level = level;
@@ -499,8 +486,8 @@ static int virtio_ioeventfd_register(virtio_device *s, int queue_idx)
     }
 
     ioevent.fd = fd;
-    ioevent.datamatch = queue_idx;  /* guest writes queue index to QUEUE_NOTIFY */
-    ioevent.len = 4;                /* 32-bit write */
+    ioevent.datamatch = queue_idx; /* guest writes queue index to QUEUE_NOTIFY */
+    ioevent.len = 4;               /* 32-bit write */
     ioevent.addr = s->mmio_addr + VIRTIO_MMIO_QUEUE_NOTIFY;
     ioevent.flags = KVM_IOEVENTFD_FLAG_DATAMATCH;
 
@@ -609,8 +596,7 @@ static void virtio_ioeventfd_stop(virtio_device *s)
 }
 
 /* signal that the descriptor has been consumed */
-static void virtio_consume_desc(virtio_device *s,
-                                int queue_idx, int desc_idx, int desc_len)
+static void virtio_consume_desc(virtio_device *s, int queue_idx, int desc_idx, int desc_len)
 {
     QueueState *qs = &s->queue[queue_idx];
     virtio_phys_addr_t index_addr = 0, ring_addr = {0};
@@ -635,9 +621,8 @@ static void virtio_consume_desc(virtio_device *s,
     trigger_irqfd(s->irq.irqfd);
 }
 
-static int get_desc_rw_size(virtio_device *s, 
-                             int *pread_size, int *pwrite_size,
-                             int queue_idx, int desc_idx)
+static int get_desc_rw_size(virtio_device *s, int *pread_size, int *pwrite_size, int queue_idx,
+                            int desc_idx)
 {
     VIRTIODesc desc = {0};
     int read_size, write_size = {0};
@@ -646,7 +631,7 @@ static int get_desc_rw_size(virtio_device *s,
     write_size = 0;
     get_desc(s, &desc, queue_idx, desc_idx);
 
-    for(;;) {
+    for (;;) {
         if (desc.flags & VRING_DESC_F_WRITE)
             break;
         read_size += desc.len;
@@ -655,8 +640,8 @@ static int get_desc_rw_size(virtio_device *s,
         desc_idx = desc.next;
         get_desc(s, &desc, queue_idx, desc_idx);
     }
-    
-    for(;;) {
+
+    for (;;) {
         if (!(desc.flags & VRING_DESC_F_WRITE))
             return -1;
         write_size += desc.len;
@@ -666,7 +651,7 @@ static int get_desc_rw_size(virtio_device *s,
         get_desc(s, &desc, queue_idx, desc_idx);
     }
 
- done:
+done:
     *pread_size = read_size;
     *pwrite_size = write_size;
     return 0;
@@ -684,22 +669,19 @@ static void queue_notify(virtio_device *s, int queue_idx)
 
     avail_idx = virtio_read16(s, qs->avail_addr + 2);
     while (qs->last_avail_idx != avail_idx) {
-        desc_idx = virtio_read16(s, qs->avail_addr + 4 + 
-                                 (qs->last_avail_idx & (qs->num - 1)) * 2);
+        desc_idx = virtio_read16(s, qs->avail_addr + 4 + (qs->last_avail_idx & (qs->num - 1)) * 2);
         if (!get_desc_rw_size(s, &read_size, &write_size, queue_idx, desc_idx)) {
-            if (s->device_recv(s, queue_idx, desc_idx,
-                               read_size, write_size) < 0)
+            if (s->device_recv(s, queue_idx, desc_idx, read_size, write_size) < 0)
                 break;
         }
         qs->last_avail_idx++;
     }
 }
 
-static uint32_t virtio_config_read(virtio_device *s, uint32_t offset,
-                                   int size)
+static uint32_t virtio_config_read(virtio_device *s, uint32_t offset, int size)
 {
     uint32_t val = {0};
-    switch(size) {
+    switch (size) {
     case 1:
         if (offset < s->config_space_size) {
             val = s->config_space[offset];
@@ -727,10 +709,9 @@ static uint32_t virtio_config_read(virtio_device *s, uint32_t offset,
     return val;
 }
 
-static void virtio_config_write(virtio_device *s, uint32_t offset,
-                                uint32_t val, int size)
+static void virtio_config_write(virtio_device *s, uint32_t offset, uint32_t val, int size)
 {
-    switch(size) {
+    switch (size) {
     case 1:
         if (offset < s->config_space_size) {
             s->config_space[offset] = val;
@@ -751,7 +732,7 @@ static void virtio_config_write(virtio_device *s, uint32_t offset,
 
 uint32_t virtio_mmio_read(virtio_device *s, uint32_t offset, int size)
 {
-    
+
     uint32_t val = {0};
 
     pthread_mutex_lock(&s->lock);
@@ -761,7 +742,7 @@ uint32_t virtio_mmio_read(virtio_device *s, uint32_t offset, int size)
     }
 
     if (size == 4) {
-        switch(offset) {
+        switch (offset) {
         case VIRTIO_MMIO_MAGIC_VALUE:
             val = 0x74726976;
             break;
@@ -775,7 +756,7 @@ uint32_t virtio_mmio_read(virtio_device *s, uint32_t offset, int size)
             val = s->vendor_id;
             break;
         case VIRTIO_MMIO_DEVICE_FEATURES:
-            switch(s->device_features_sel) {
+            switch (s->device_features_sel) {
             case 0:
                 val = s->device_features;
                 break;
@@ -837,7 +818,7 @@ uint32_t virtio_mmio_read(virtio_device *s, uint32_t offset, int size)
         fprintf(stderr, "virtio mmio read error: len != 4\n");
         val = 0;
     }
-    
+
 end:
     pthread_mutex_unlock(&s->lock);
     return val;
@@ -853,8 +834,7 @@ static void set_high32(virtio_phys_addr_t *paddr, uint32_t val)
     *paddr = (*paddr & 0xffffffff) | ((virtio_phys_addr_t)val << 32);
 }
 
-void virtio_mmio_write(virtio_device *s, uint32_t offset,
-                       uint32_t val, int size)
+void virtio_mmio_write(virtio_device *s, uint32_t offset, uint32_t val, int size)
 {
     pthread_mutex_lock(&s->lock);
     if (offset >= VIRTIO_MMIO_CONFIG) {
@@ -863,7 +843,7 @@ void virtio_mmio_write(virtio_device *s, uint32_t offset,
     }
 
     if (size == 4) {
-        switch(offset) {
+        switch (offset) {
         case VIRTIO_MMIO_DEVICE_FEATURES_SEL:
             s->device_features_sel = val;
             break;
@@ -921,10 +901,7 @@ end:
     pthread_mutex_unlock(&s->lock);
 }
 
-void virtio_set_debug(virtio_device *s, int debug)
-{
-    s->debug = debug;
-}
+void virtio_set_debug(virtio_device *s, int debug) { s->debug = debug; }
 
 /*********************************************************************/
 /* block device */
@@ -952,8 +929,6 @@ typedef struct {
     uint64_t sector_num;
 } block_request_header;
 
-
-
 static void virtio_block_req_end(struct blk_io_callback_arg *arg, int ret)
 {
     virtio_device *s = arg->s;
@@ -962,7 +937,7 @@ static void virtio_block_req_end(struct blk_io_callback_arg *arg, int ret)
     int desc_idx = arg->req.desc_idx;
     uint8_t *buf = {0}, buf1[1] = {0};
 
-    switch(arg->req.type) {
+    switch (arg->req.type) {
     case (uint32_t)virtio_block_device::cmd_type::in:
         write_size = arg->req.write_size;
         buf = arg->req.buf;
@@ -1001,8 +976,7 @@ static void virtio_block_req_cb(struct blk_io_callback_arg *arg, int ret)
     pthread_mutex_unlock(&s->lock);
 }
 
-static int virtio_block_recv_request(virtio_device *s, int queue_idx,
-                                     int desc_idx, int read_size,
+static int virtio_block_recv_request(virtio_device *s, int queue_idx, int desc_idx, int read_size,
                                      int write_size)
 {
     virtio_block_device *s1 = (virtio_block_device *)s;
@@ -1010,22 +984,22 @@ static int virtio_block_recv_request(virtio_device *s, int queue_idx,
     block_request_header h = {0};
     uint8_t *buf = {0};
     int len, ret = {0};
-    
+
     if (memcpy_from_queue(s, &h, queue_idx, desc_idx, 0, sizeof(h)) < 0)
         return 0;
-    struct blk_io_callback_arg *iocb_arg = (struct blk_io_callback_arg *)malloc(sizeof(struct blk_io_callback_arg));
+    struct blk_io_callback_arg *iocb_arg =
+        (struct blk_io_callback_arg *)malloc(sizeof(struct blk_io_callback_arg));
     *iocb_arg = (struct blk_io_callback_arg){0};
     iocb_arg->s = s;
     iocb_arg->req.type = h.type;
     iocb_arg->req.queue_idx = queue_idx;
     iocb_arg->req.desc_idx = desc_idx;
-    switch(h.type) {
+    switch (h.type) {
     case (uint32_t)virtio_block_device::cmd_type::in:
         iocb_arg->req.buf = (uint8_t *)malloc(write_size);
         memset(iocb_arg->req.buf, 0, write_size);
         iocb_arg->req.write_size = write_size;
-        ret = bs->read_async(bs, h.sector_num, iocb_arg->req.buf, 
-                             (write_size - 1) / SECTOR_SIZE,
+        ret = bs->read_async(bs, h.sector_num, iocb_arg->req.buf, (write_size - 1) / SECTOR_SIZE,
                              virtio_block_req_cb, iocb_arg);
         if (ret < 0) {
             virtio_block_req_end(iocb_arg, ret);
@@ -1045,8 +1019,8 @@ static int virtio_block_recv_request(virtio_device *s, int queue_idx,
         buf = (uint8_t *)malloc(len);
         memset(buf, 0, len);
         memcpy_from_queue(s, buf, queue_idx, desc_idx, sizeof(h), len);
-        ret = bs->write_async(bs, h.sector_num, buf, len / SECTOR_SIZE,
-                              virtio_block_req_cb, iocb_arg);
+        ret = bs->write_async(bs, h.sector_num, buf, len / SECTOR_SIZE, virtio_block_req_cb,
+                              iocb_arg);
         if (ret < 0) {
             free(buf);
             virtio_block_req_end(iocb_arg, ret);
@@ -1066,8 +1040,8 @@ virtio_device *virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, block_d
 
     s = (virtio_block_device *)malloc(sizeof(*s));
     *s = (virtio_block_device){0};
-    if (virtio_init(&s->common, bus, mmio_addr,
-                2, 8, virtio_block_recv_request, VIRTIO_BLK_MAX_QUEUE_NUM) < 0) {
+    if (virtio_init(&s->common, bus, mmio_addr, 2, 8, virtio_block_recv_request,
+                    VIRTIO_BLK_MAX_QUEUE_NUM) < 0) {
         free(s);
         return NULL;
     }
@@ -1080,14 +1054,16 @@ virtio_device *virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, block_d
     return (virtio_device *)s;
 }
 
-void virtio_block_destroy(virtio_device *s) {
+void virtio_block_destroy(virtio_device *s)
+{
     virtio_block_device *bs = (virtio_block_device *)s;
     virtio_ioeventfd_stop(s);
     virtio_irqfd_cleanup(&s->irq);
     free(bs->bs);
 }
 
-void* virtio_block_get_opaque(virtio_device *s) {
+void *virtio_block_get_opaque(virtio_device *s)
+{
     virtio_block_device *bs = (virtio_block_device *)s;
     return bs->bs->opaque;
 }
@@ -1111,8 +1087,7 @@ typedef struct __attribute__((packed)) {
     uint16_t num_buffers;
 } virtio_net_header;
 
-static int virtio_net_recv_request(virtio_device *s, int queue_idx,
-                                   int desc_idx, int read_size,
+static int virtio_net_recv_request(virtio_device *s, int queue_idx, int desc_idx, int read_size,
                                    int write_size)
 {
     virtio_net_device *s1 = (virtio_net_device *)s;
@@ -1172,11 +1147,10 @@ static void virtio_net_write_packet(ethernet_device *es, const uint8_t *buf, int
     avail_idx = virtio_read16(s, qs->avail_addr + 2);
     if (qs->last_avail_idx == avail_idx)
         goto end;
-    desc_idx = virtio_read16(s, qs->avail_addr + 4 + 
-                             (qs->last_avail_idx & (qs->num - 1)) * 2);
+    desc_idx = virtio_read16(s, qs->avail_addr + 4 + (qs->last_avail_idx & (qs->num - 1)) * 2);
     if (get_desc_rw_size(s, &read_size, &write_size, queue_idx, desc_idx))
         goto end;
-    len = s1->header_size + buf_len; 
+    len = s1->header_size + buf_len;
     if (len > write_size)
         goto end;
     memset(&h, 0, s1->header_size);
@@ -1194,8 +1168,8 @@ virtio_device *virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, ethernet_
 
     s = (virtio_net_device *)malloc(sizeof(*s));
     *s = (virtio_net_device){0};
-    if (virtio_init(&s->common, bus, mmio_addr,
-                1, 6 + 2, virtio_net_recv_request, VIRTIO_NET_MAX_QUEUE_NUM) < 0) {
+    if (virtio_init(&s->common, bus, mmio_addr, 1, 6 + 2, virtio_net_recv_request,
+                    VIRTIO_NET_MAX_QUEUE_NUM) < 0) {
         free(s);
         return NULL;
     }
@@ -1209,21 +1183,23 @@ virtio_device *virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, ethernet_
     s->common.config_space[7] = 0;
 
     s->header_size = sizeof(virtio_net_header);
-    
+
     es->device_opaque = s;
     es->can_write_packet_to_virtio = virtio_net_can_write_packet;
     es->write_packet_to_virtio = virtio_net_write_packet;
     return (virtio_device *)s;
 }
 
-void virtio_net_destroy(virtio_device *s) {
+void virtio_net_destroy(virtio_device *s)
+{
     virtio_net_device *es = (virtio_net_device *)s;
     virtio_ioeventfd_stop(s);
     virtio_irqfd_cleanup(&s->irq);
     free(es->es);
 }
 
-void* virtio_net_get_opaque(virtio_device *s) {
+void *virtio_net_get_opaque(virtio_device *s)
+{
     virtio_net_device *es = (virtio_net_device *)s;
     return es->es->opaque;
 }

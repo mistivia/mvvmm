@@ -1,10 +1,10 @@
 /**
  * Copyright (c) 2026 Mistivia <i@mistivia.com>
- * 
+ *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
  * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
  * AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
@@ -13,7 +13,6 @@
  * OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
-
 
 #include <poll.h>
 #include <pthread.h>
@@ -42,8 +41,7 @@ struct tap_net_ctx {
     pthread_mutex_t lock;
 };
 
-static void
-write_packet_to_ether(ethernet_device *net, const uint8_t *buf, int len)
+static void write_packet_to_ether(ethernet_device *net, const uint8_t *buf, int len)
 {
     struct tap_net_ctx *ctx = (struct tap_net_ctx *)net->opaque;
     if (!ctx || ctx->fd < 0 || !buf || len <= 0) {
@@ -52,8 +50,7 @@ write_packet_to_ether(ethernet_device *net, const uint8_t *buf, int len)
     write(ctx->fd, buf, len);
 }
 
-static ssize_t
-timed_read(int fd, void *buf, size_t len, int timeout_ms)
+static ssize_t timed_read(int fd, void *buf, size_t len, int timeout_ms)
 {
     struct pollfd pfd = {0};
     int ret = 0;
@@ -80,8 +77,7 @@ timed_read(int fd, void *buf, size_t len, int timeout_ms)
     return -1;
 }
 
-static void *
-tap_net_rx_thread(void *arg)
+static void *tap_net_rx_thread(void *arg)
 {
     ethernet_device *net = (ethernet_device *)arg;
     struct tap_net_ctx *ctx = (struct tap_net_ctx *)net->opaque;
@@ -114,8 +110,7 @@ tap_net_rx_thread(void *arg)
         }
 
         // Check if virtio net device can receive packet
-        if (net->can_write_packet_to_virtio &&
-            net->can_write_packet_to_virtio(net)) {
+        if (net->can_write_packet_to_virtio && net->can_write_packet_to_virtio(net)) {
             net->write_packet_to_virtio(net, buf, len);
         }
         // If virtio queue is full, packet is dropped
@@ -125,8 +120,7 @@ tap_net_rx_thread(void *arg)
 }
 
 // Initialize virtio network device with TAP backend
-int
-mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
+int mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
 {
     struct tap_net_ctx *ctx = NULL;
     ethernet_device *net = NULL;
@@ -220,7 +214,8 @@ fail:
     return ret;
 }
 
-void mvvm_destroy_virtio_net(struct mvvm *self) {
+void mvvm_destroy_virtio_net(struct mvvm *self)
+{
     struct tap_net_ctx *ctx = (struct tap_net_ctx *)virtio_net_get_opaque(self->net);
     pthread_mutex_lock(&ctx->lock);
     ctx->quit = 1;

@@ -1,10 +1,10 @@
 /**
  * Copyright (c) 2026 Mistivia <i@mistivia.com>
- * 
+ *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
  * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
  * AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
@@ -13,7 +13,6 @@
  * OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
-
 
 #include "serial.h"
 
@@ -33,57 +32,28 @@
 
 namespace mvvmm {
 
-void serial::clear_intr()
-{
-    m_regs[2] = 0b0001;
-}
+void serial::clear_intr() { m_regs[2] = 0b0001; }
 
-void serial::set_rx_intr()
-{
-    m_regs[2] = 0b0100;
-}
+void serial::set_rx_intr() { m_regs[2] = 0b0100; }
 
-int serial::is_rx_intr_set()
-{
-    return m_regs[2] == 0b0100;
-}
+int serial::is_rx_intr_set() { return m_regs[2] == 0b0100; }
 
-void serial::set_tx_intr()
-{
-    m_regs[2] = 0b0010;
-}
+void serial::set_tx_intr() { m_regs[2] = 0b0010; }
 
-void serial::set_data_ready()
-{
-    m_regs[5] |= 0x01;
-}
+void serial::set_data_ready() { m_regs[5] |= 0x01; }
 
-void serial::clear_data_ready()
-{
-    m_regs[5] &= (~0x01);
-}
+void serial::clear_data_ready() { m_regs[5] &= (~0x01); }
 
-int serial::is_rx_empty()
-{
-    return !(m_regs[5] & 0x01);
-}
+int serial::is_rx_empty() { return !(m_regs[5] & 0x01); }
 
-int serial::is_dlab_set()
-{
-    return m_regs[3] & 0x80;
-}
+int serial::is_dlab_set() { return m_regs[3] & 0x80; }
 
-int serial::is_tx_intr_enabled()
-{
-    return m_regs[1] & 0b0010;
-}
+int serial::is_tx_intr_enabled() { return m_regs[1] & 0b0010; }
 
-int serial::is_rx_intr_enabled()
-{
-    return m_regs[1] & 0b0001;
-}
+int serial::is_rx_intr_enabled() { return m_regs[1] & 0b0001; }
 
-void serial::set_irq() {
+void serial::set_irq()
+{
     struct kvm_irq_level irq = {0};
     irq.irq = 4;
     irq.level = 1;
@@ -102,17 +72,14 @@ void serial::clear_irq()
     }
 }
 
-void serial::write_reg(int offset, uint8_t data)
+void serial::write_reg(int offset, uint8_t data) { m_regs[offset] = data; }
+
+void write_to_serial(struct mvvm *vm, char c) {}
+
+uint8_t serial::read_reg(int offset)
 {
-    m_regs[offset] = data;
-}
-
-void write_to_serial(struct mvvm *vm, char c) {
-
-}
-
-uint8_t serial::read_reg(int offset) {
-    if (offset == 7) return 0;
+    if (offset == 7)
+        return 0;
     if (offset == 2) {
         uint8_t ret = m_regs[2];
         if (is_rx_intr_set() && is_tx_intr_enabled()) {

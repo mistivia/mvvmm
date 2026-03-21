@@ -1,10 +1,10 @@
 /**
  * Copyright (c) 2026 Mistivia <i@mistivia.com>
- * 
+ *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
  * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
  * AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
@@ -13,7 +13,6 @@
  * OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
-
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -53,8 +52,7 @@ struct async_io_req {
 };
 
 // Worker function executed by thread pool for disk I/O operations
-static void*
-block_io_worker_fn(void *arg)
+static void *block_io_worker_fn(void *arg)
 {
     struct async_io_req *req = (struct async_io_req *)arg;
     ssize_t n = 0;
@@ -87,17 +85,15 @@ block_io_worker_fn(void *arg)
 }
 
 // Get total sector count (synchronous operation)
-static int64_t
-block_get_sector_count(block_device *bs)
+static int64_t block_get_sector_count(block_device *bs)
 {
     struct block_device_ctx *ctx = (struct block_device_ctx *)bs->opaque;
     return ctx->size / SECTOR_SIZE;
 }
 
 // Asynchronous read operation using thread pool
-static int
-block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf, int n,
-                 block_device_comp_func *cb, struct blk_io_callback_arg *opaque)
+static int block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf, int n,
+                            block_device_comp_func *cb, struct blk_io_callback_arg *opaque)
 {
     struct block_device_ctx *ctx = (struct block_device_ctx *)bs->opaque;
     struct async_io_req *req = NULL;
@@ -124,12 +120,12 @@ block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf, int n,
 }
 
 // Asynchronous write operation using thread pool
-static int
-block_write_async(block_device *bs, uint64_t sector_num, const uint8_t *buf,
-                  int n, block_device_comp_func *cb, struct blk_io_callback_arg *opaque)
+static int block_write_async(block_device *bs, uint64_t sector_num, const uint8_t *buf, int n,
+                             block_device_comp_func *cb, struct blk_io_callback_arg *opaque)
 {
     struct block_device_ctx *ctx = (struct block_device_ctx *)bs->opaque;
-    struct async_io_req *req = NULL;;
+    struct async_io_req *req = NULL;
+    ;
 
     req = (struct async_io_req *)malloc(sizeof(*req));
     if (!req) {
@@ -154,8 +150,7 @@ block_write_async(block_device *bs, uint64_t sector_num, const uint8_t *buf,
 }
 
 // Initialize virtio block device with thread pool backend
-int
-mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
+int mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
 {
     struct block_device_ctx *ctx = NULL;
     block_device *bs = NULL;
@@ -227,7 +222,8 @@ fail:
     return ret;
 }
 
-void mvvm_destroy_virtio_blk(struct mvvm *self) {
+void mvvm_destroy_virtio_blk(struct mvvm *self)
+{
     struct block_device_ctx *ctx = (struct block_device_ctx *)virtio_block_get_opaque(self->blk);
     delete ctx->pool;
     free(ctx);

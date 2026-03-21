@@ -1,10 +1,10 @@
 /**
  * Copyright (c) 2026 Mistivia <i@mistivia.com>
- * 
+ *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
  * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
  * AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
@@ -13,7 +13,6 @@
  * OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
-
 
 #include <pthread.h>
 #include <stdarg.h>
@@ -38,11 +37,10 @@ struct mvvm *g_vm = NULL;
 struct termios orig_termios;
 int g_term_changed = 0;
 
-void reset_terminal_mode() {
-    tcsetattr(0, TCSAFLUSH, &orig_termios);
-}
+void reset_terminal_mode() { tcsetattr(0, TCSAFLUSH, &orig_termios); }
 
-void set_terminal_raw_mode() {
+void set_terminal_raw_mode()
+{
     struct termios raw = {0};
     if (!isatty(0)) {
         fprintf(stderr, "Not a terminal.\n");
@@ -50,16 +48,17 @@ void set_terminal_raw_mode() {
     }
     tcgetattr(0, &orig_termios);
     atexit(reset_terminal_mode);
-    
+
     raw = orig_termios;
     raw.c_lflag &= ~(ECHO | ICANON | ISIG);
-    raw.c_cc[VMIN] = 1; // return at 1 char
+    raw.c_cc[VMIN] = 1;  // return at 1 char
     raw.c_cc[VTIME] = 0; // no timeout
     tcsetattr(0, TCSAFLUSH, &raw);
     g_term_changed = 1;
 }
 
-static int timed_getchar(int fd, int timeout_ms, int *ch) {
+static int timed_getchar(int fd, int timeout_ms, int *ch)
+{
     struct pollfd pfd;
     int ret;
     unsigned char c;
@@ -81,11 +80,12 @@ static int timed_getchar(int fd, int timeout_ms, int *ch) {
     } else if (ret == 0) {
         return 0;
     } else {
-        return 0; 
+        return 0;
     }
 }
 
-void* keyboard_thread_func(void* arg) {
+void *keyboard_thread_func(void *arg)
+{
     fprintf(stderr, "Press Ctrl+A & Ctrl+C to exit...\n");
     struct mvvm *vm = (struct mvvm *)arg;
     set_terminal_raw_mode();
@@ -94,9 +94,12 @@ void* keyboard_thread_func(void* arg) {
     int ret = 0;
     while (1) {
         ret = timed_getchar(STDIN_FILENO, 300, &ch);
-        if (vm->quit) break;
-        if (ch == EOF) break;
-        if (ret == 0) continue;
+        if (vm->quit)
+            break;
+        if (ch == EOF)
+            break;
+        if (ret == 0)
+            continue;
         if (escaped) {
             escaped = 0;
             if (ch == 0x03) {
@@ -118,7 +121,8 @@ void* keyboard_thread_func(void* arg) {
     return NULL;
 }
 
-void sigint_handler(int sig) {
+void sigint_handler(int sig)
+{
     (void)sig;
     if (g_term_changed) {
         reset_terminal_mode();
@@ -126,7 +130,8 @@ void sigint_handler(int sig) {
     _exit(128 + SIGINT);
 }
 
-void sigterm_handler(int sig) {
+void sigterm_handler(int sig)
+{
     (void)sig;
     mvvm_shutdown(g_vm);
 }
@@ -134,8 +139,8 @@ void sigterm_handler(int sig) {
 struct cmd_opts {
     const char *kernel_path;
     const char *initrd_path; // can be null
-    const char *disk_path; // can be null
-    uint64_t memory_size; // default 1GB
+    const char *disk_path;   // can be null
+    uint64_t memory_size;    // default 1GB
     const char *kernel_cmdline;
     const char *tap_ifname;
 };
@@ -144,8 +149,7 @@ static void print_usage(FILE *stream, const char *program_name);
 
 // Parse memory size string supporting optional K/M/G suffix
 // Returns 0 on success, -1 on error
-static int
-parse_memory_size(const char *str, uint64_t *result)
+static int parse_memory_size(const char *str, uint64_t *result)
 {
     char *endptr = NULL;
     unsigned long long val = -1;
@@ -198,17 +202,14 @@ parse_memory_size(const char *str, uint64_t *result)
     return 0;
 }
 
-struct cmd_opts
-parse_opts(int argc, char **argv)
+struct cmd_opts parse_opts(int argc, char **argv)
 {
-    struct cmd_opts opts = {
-        .kernel_path = NULL,
-        .initrd_path = NULL,
-        .disk_path = NULL,
-        .memory_size = 1024LL * 1024 * 1024,
-        .kernel_cmdline = DEFAULT_KERNEL_CMDLINE,
-        .tap_ifname = NULL
-    };
+    struct cmd_opts opts = {.kernel_path = NULL,
+                            .initrd_path = NULL,
+                            .disk_path = NULL,
+                            .memory_size = 1024LL * 1024 * 1024,
+                            .kernel_cmdline = DEFAULT_KERNEL_CMDLINE,
+                            .tap_ifname = NULL};
 
     int opt = 0;
     const char *program_name = (argc > 0) ? argv[0] : "mvvmm";
@@ -233,8 +234,7 @@ parse_opts(int argc, char **argv)
         case 'm': {
             uint64_t mem_size;
             if (parse_memory_size(optarg, &mem_size) != 0) {
-                fprintf(stderr, "Error: Invalid memory size '%s'\n",
-                        optarg);
+                fprintf(stderr, "Error: Invalid memory size '%s'\n", optarg);
                 print_usage(stderr, program_name);
                 exit(EXIT_FAILURE);
             }
@@ -248,16 +248,11 @@ parse_opts(int argc, char **argv)
             print_usage(stdout, program_name);
             exit(EXIT_SUCCESS);
         case '?':
-            if (optopt == 'k' || optopt == 'i'
-                    || optopt == 'm' || optopt == 'a'
-                    || optopt == 'd' || optopt == 't') {
-                fprintf(stderr,
-                        "Error: Option -%c requires an argument.\n",
-                        optopt);
+            if (optopt == 'k' || optopt == 'i' || optopt == 'm' || optopt == 'a' || optopt == 'd' ||
+                optopt == 't') {
+                fprintf(stderr, "Error: Option -%c requires an argument.\n", optopt);
             } else {
-                fprintf(stderr,
-                        "Error: Unknown option '-%c'.\n",
-                        optopt);
+                fprintf(stderr, "Error: Unknown option '-%c'.\n", optopt);
             }
             print_usage(stderr, program_name);
             exit(EXIT_FAILURE);
@@ -269,8 +264,7 @@ parse_opts(int argc, char **argv)
 
     // Reject extra non-option arguments
     if (optind < argc) {
-        fprintf(stderr, "Error: Unexpected argument '%s'\n",
-                argv[optind]);
+        fprintf(stderr, "Error: Unexpected argument '%s'\n", argv[optind]);
         print_usage(stderr, program_name);
         exit(EXIT_FAILURE);
     }
@@ -285,8 +279,7 @@ parse_opts(int argc, char **argv)
     return opts;
 }
 
-static void
-print_usage(FILE *stream, const char *program_name)
+static void print_usage(FILE *stream, const char *program_name)
 {
     fprintf(stream,
             "Usage: %s -k VMLINUZ [-i INITRD] [-m MEMORY_SIZE] "
@@ -294,29 +287,23 @@ print_usage(FILE *stream, const char *program_name)
             program_name);
     fprintf(stream, "\n");
     fprintf(stream, "Options:\n");
-    fprintf(stream,
-            "  -k VMLINUZ        Path to kernel image (required)\n");
-    fprintf(stream,
-            "  -i INITRD         Path to initrd image (optional)\n");
-    fprintf(stream,
-            "  -m MEMORY_SIZE    Memory size with optional K/M/G suffix "
-            "(default: 1G)\n");
-    fprintf(stream,
-            "  -d DISK_IMG       Path to disk image (optional)\n");
-    fprintf(stream,
-            "  -t TAP_IFNAME     Tap interface name (optional)\n");
-    fprintf(stream,
-            "  -a KERNEL_CMDLINE Kernel command line "
-            "(default: \"console=ttyS0 debug\")\n");
-    fprintf(stream,
-            "  -h                Show this help message\n");
+    fprintf(stream, "  -k VMLINUZ        Path to kernel image (required)\n");
+    fprintf(stream, "  -i INITRD         Path to initrd image (optional)\n");
+    fprintf(stream, "  -m MEMORY_SIZE    Memory size with optional K/M/G suffix "
+                    "(default: 1G)\n");
+    fprintf(stream, "  -d DISK_IMG       Path to disk image (optional)\n");
+    fprintf(stream, "  -t TAP_IFNAME     Tap interface name (optional)\n");
+    fprintf(stream, "  -a KERNEL_CMDLINE Kernel command line "
+                    "(default: \"console=ttyS0 debug\")\n");
+    fprintf(stream, "  -h                Show this help message\n");
 }
 
 } // namespace mvvmm
 
 using namespace mvvmm;
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     struct mvvm vm = {0};
     struct cmd_opts opts = parse_opts(argc, argv);
     vm = (struct mvvm){0};
@@ -334,9 +321,7 @@ int main(int argc, char **argv) {
     g_vm = &vm;
     signal(SIGINT, sigint_handler);
     signal(SIGTERM, sigterm_handler);
-    std::thread vm_th{[&]() {
-        mvvm_run(&vm);
-    }};
+    std::thread vm_th{[&]() { mvvm_run(&vm); }};
     vm_th.join();
     vm.quit = true;
     pthread_join(keyboard_thread, NULL);

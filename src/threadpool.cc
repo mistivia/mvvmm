@@ -1,10 +1,10 @@
 /**
  * Copyright (c) 2026 Mistivia <i@mistivia.com>
- * 
+ *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
  * REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
  * AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
@@ -13,7 +13,6 @@
  * OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
  * PERFORMANCE OF THIS SOFTWARE.
  */
-
 
 #include "threadpool.h"
 
@@ -42,19 +41,16 @@ void worker_thread::run()
     }
 }
 
-worker_thread *
-worker_thread::make_instance(thread_pool *pool, int id)
+worker_thread *worker_thread::make_instance(thread_pool *pool, int id)
 {
     auto *self = new worker_thread{};
     self->m_pool = pool;
     self->m_id = id;
-    self->m_th = std::thread{[=]() {
-        self->run();
-    }};
+    self->m_th = std::thread{[=]() { self->run(); }};
     return self;
 }
 
-thread_pool * thread_pool::make_instance(int thread_num)
+thread_pool *thread_pool::make_instance(int thread_num)
 {
     auto *self = new thread_pool{};
     self->m_worker_num = thread_num;
