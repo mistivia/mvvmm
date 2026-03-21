@@ -34,8 +34,8 @@ private:
     explicit thread_pool() = default;
     thread_pool(const thread_pool &) = delete;
     thread_pool& operator=(const thread_pool &) = delete;
-    worker_thread **m_workers = nullptr;
-    bool *m_is_working = nullptr;
+    std::vector<std::unique_ptr<worker_thread>> m_workers;
+    std::vector<uint8_t> m_is_working;
     int m_worker_num = -1;
     std::mutex m_lock;
     bool m_quit = false;
@@ -52,7 +52,7 @@ private:
     worker_thread& operator=(const worker_thread &) = delete;
 
     std::function<void(void)> m_task;
-    bool m_has_task;
+    bool m_has_task = false;
     std::thread m_th;
     std::mutex m_lock;
     std::condition_variable m_cond;

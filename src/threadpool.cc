@@ -18,6 +18,8 @@
 #include "threadpool.h"
 
 #include <chrono>
+#include <memory>
+#include <vector>
 
 namespace mvvmm {
 
@@ -56,10 +58,10 @@ thread_pool * thread_pool::make_instance(int thread_num)
     auto *self = new thread_pool{};
     self->m_quit = 0;
     self->m_worker_num = thread_num;
-    self->m_workers = new worker_thread*[self->m_worker_num];
-    self->m_is_working = new bool[self->m_worker_num];
+    self->m_workers.resize(self->m_worker_num);
+    self->m_is_working.resize(self->m_worker_num);
     for (int i = 0; i < self->m_worker_num; i++) {
-        self->m_workers[i] = worker_thread::make_instance(self, i);
+        self->m_workers[i].reset(worker_thread::make_instance(self, i));
         self->m_is_working[i] = false;
     }
     return self;
@@ -71,7 +73,7 @@ int thread_pool::run(std::function<void(void)> &&task)
     for (int i = 0; i < m_worker_num; i++) {
         if (!m_is_working[i]) {
             m_is_working[i] = true;
-            struct worker_thread *worker = m_workers[i];
+            auto &worker = m_workers[i];
             lk.unlock();
             std::unique_lock<std::mutex> wlk{worker->m_lock};
             if (m_quit) {
@@ -86,14 +88,14 @@ int thread_pool::run(std::function<void(void)> &&task)
     return -1;
 }
 
-thread_pool::~thread_pool() {
+thread_pool::~thread_pool()
+{
     m_quit = 1;
     for (int i = 0; i < m_worker_num; i++) {
-        m_workers[i]->m_th.join();
-        delete m_workers[i];
+        if (m_workers[i]->m_th.joinable()) {
+            m_workers[i]->m_th.join();
+        }
     }
-    delete[] m_workers;
-    delete[] m_is_working;
 }
 
 } // namespace mvvmm
