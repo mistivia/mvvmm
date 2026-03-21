@@ -21,6 +21,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <optional>
 
 namespace mvvmm {
 
@@ -53,8 +54,7 @@ private:
     worker_thread(const worker_thread &) = delete;
     worker_thread& operator=(const worker_thread &) = delete;
 
-    std::function<void(void)> m_task;
-    bool m_has_task = false;
+    std::optional<std::function<void(void)>> m_task = std::nullopt;
     std::thread m_th;
     std::mutex m_lock;
     std::condition_variable m_cond;

@@ -20,6 +20,7 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace mvvmm {
@@ -28,14 +29,14 @@ void worker_thread::run()
 {
     std::unique_lock<std::mutex> lk{m_lock};
     while (1) {
-        while (!m_has_task) {
+        while (!m_task.has_value()) {
             if (m_pool->m_quit.load(std::memory_order_acquire)) {
                 return;
             }
             m_cond.wait_for(lk, std::chrono::milliseconds(300));
         }
-        m_task();
-        m_has_task = false;
+        m_task.value();
+        m_task = std::nullopt;
         std::unique_lock<std::mutex> plk{m_pool->m_lock};
         m_pool->m_is_working[m_id] = false;
     }
@@ -47,7 +48,6 @@ worker_thread::make_instance(thread_pool *pool, int id)
     auto *self = new worker_thread{};
     self->m_pool = pool;
     self->m_id = id;
-    self->m_has_task = false;
     self->m_th = std::thread{[=]() {
         self->run();
     }};
@@ -77,7 +77,6 @@ int thread_pool::run(std::function<void(void)> &&task)
             lk.unlock();
             std::unique_lock<std::mutex> wlk{worker->m_lock};
             worker->m_task = std::move(task);
-            worker->m_has_task = true;
             worker->m_cond.notify_one();
             return 0;
         }
