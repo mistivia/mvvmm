@@ -20,6 +20,7 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <atomic>
 
 namespace mvvmm {
 
@@ -38,15 +39,16 @@ private:
     std::vector<uint8_t> m_is_working;
     int m_worker_num = -1;
     std::mutex m_lock;
-    bool m_quit = false;
+    std::atomic<bool> m_quit{false};
     friend class worker_thread;
 };
 
 class worker_thread {
+public:
+    ~worker_thread();
 private:
     static worker_thread* make_instance(struct thread_pool *pool, int id);
     void run();
-    
     explicit worker_thread() = default;
     worker_thread(const worker_thread &) = delete;
     worker_thread& operator=(const worker_thread &) = delete;

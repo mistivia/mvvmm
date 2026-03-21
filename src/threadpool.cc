@@ -17,6 +17,7 @@
 
 #include "threadpool.h"
 
+#include <atomic>
 #include <chrono>
 #include <memory>
 #include <vector>
@@ -28,7 +29,7 @@ void worker_thread::run()
     std::unique_lock<std::mutex> lk{m_lock};
     while (1) {
         while (!m_has_task) {
-            if (m_pool->m_quit) {
+            if (m_pool->m_quit.load(std::memory_order_acquire)) {
                 return;
             }
             m_cond.wait_for(lk, std::chrono::milliseconds(300));
@@ -41,7 +42,7 @@ void worker_thread::run()
 }
 
 worker_thread *
-worker_thread::make_instance(struct thread_pool *pool, int id)
+worker_thread::make_instance(thread_pool *pool, int id)
 {
     auto *self = new worker_thread{};
     self->m_pool = pool;
@@ -56,7 +57,6 @@ worker_thread::make_instance(struct thread_pool *pool, int id)
 thread_pool * thread_pool::make_instance(int thread_num)
 {
     auto *self = new thread_pool{};
-    self->m_quit = 0;
     self->m_worker_num = thread_num;
     self->m_workers.resize(self->m_worker_num);
     self->m_is_working.resize(self->m_worker_num);
@@ -76,9 +76,6 @@ int thread_pool::run(std::function<void(void)> &&task)
             auto &worker = m_workers[i];
             lk.unlock();
             std::unique_lock<std::mutex> wlk{worker->m_lock};
-            if (m_quit) {
-                return -1;
-            }
             worker->m_task = std::move(task);
             worker->m_has_task = true;
             worker->m_cond.notify_one();
@@ -88,12 +85,19 @@ int thread_pool::run(std::function<void(void)> &&task)
     return -1;
 }
 
+worker_thread::~worker_thread()
+{
+    if (m_th.joinable()) {
+        m_th.join();
+    }
+}
+
 thread_pool::~thread_pool()
 {
-    m_quit = 1;
+    m_quit.store(true, std::memory_order_release);
     for (int i = 0; i < m_worker_num; i++) {
         if (m_workers[i]->m_th.joinable()) {
-            m_workers[i]->m_th.join();
+            m_workers[i]->m_cond.notify_all();
         }
     }
 }
