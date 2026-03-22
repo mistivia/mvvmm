@@ -5,7 +5,7 @@
 [![Arch: x86_64](https://img.shields.io/badge/Arch-x86__64-green)](https://en.wikipedia.org/wiki/X86-64)
 [![Requires: KVM](https://img.shields.io/badge/Requires-KVM-orange)](https://www.linux-kvm.org/)
 
-A lightweight, hackable Virtual Machine Monitor (VMM) built on KVM. Designed for experimentation and learning, not ready for production use.
+A virtual machine monitor (VMM) built upon KVM, designed for experimentation and learning.
 
 **Features**:
 - Boot Linux with minimal overhead
