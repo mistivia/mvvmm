@@ -34,7 +34,8 @@ void worker_thread::run()
             }
             m_cond.wait_for(lk, std::chrono::milliseconds(300));
         }
-        m_task.value();
+        auto &task_fn = m_task.value();
+        task_fn();
         m_task = std::nullopt;
         std::unique_lock<std::mutex> plk{m_pool->m_lock};
         m_pool->m_is_working[m_id] = false;
