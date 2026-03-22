@@ -16,7 +16,6 @@
 
 #include <pthread.h>
 #include <stdarg.h>
-#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>

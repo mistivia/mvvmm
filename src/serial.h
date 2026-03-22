@@ -39,16 +39,16 @@ private:
     std::condition_variable m_rx_cond;
     mvvm *m_vm = nullptr;
 
-    void clear_intr();
-    void set_rx_intr();
-    int is_rx_intr_set();
-    void set_tx_intr();
-    void set_data_ready();
-    void clear_data_ready();
-    int is_rx_empty();
-    int is_dlab_set();
-    int is_tx_intr_enabled();
-    int is_rx_intr_enabled();
+    void clear_intr() { m_regs[2] = 0b0001; }
+    void set_rx_intr() { m_regs[2] = 0b0100; }
+    int is_rx_intr_set() { return m_regs[2] == 0b0100; }
+    void set_tx_intr() { m_regs[2] = 0b0010; }
+    void set_data_ready() { m_regs[5] |= 0x01; }
+    void clear_data_ready() { m_regs[5] &= (~0x01); }
+    int is_rx_empty() { return !(m_regs[5] & 0x01); }
+    int is_dlab_set() { return m_regs[3] & 0x80; }
+    int is_tx_intr_enabled() { return m_regs[1] & 0b0010; }
+    int is_rx_intr_enabled() { return m_regs[1] & 0b0001; }
     void set_irq();
     void clear_irq();
     void write_reg(int offset, uint8_t data);

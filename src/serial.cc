@@ -32,26 +32,6 @@
 
 namespace mvvmm {
 
-void serial::clear_intr() { m_regs[2] = 0b0001; }
-
-void serial::set_rx_intr() { m_regs[2] = 0b0100; }
-
-int serial::is_rx_intr_set() { return m_regs[2] == 0b0100; }
-
-void serial::set_tx_intr() { m_regs[2] = 0b0010; }
-
-void serial::set_data_ready() { m_regs[5] |= 0x01; }
-
-void serial::clear_data_ready() { m_regs[5] &= (~0x01); }
-
-int serial::is_rx_empty() { return !(m_regs[5] & 0x01); }
-
-int serial::is_dlab_set() { return m_regs[3] & 0x80; }
-
-int serial::is_tx_intr_enabled() { return m_regs[1] & 0b0010; }
-
-int serial::is_rx_intr_enabled() { return m_regs[1] & 0b0001; }
-
 void serial::set_irq()
 {
     struct kvm_irq_level irq = {0};
