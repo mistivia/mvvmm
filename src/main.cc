@@ -93,7 +93,7 @@ void *keyboard_thread_func(void *arg)
     int ret = 0;
     while (1) {
         ret = timed_getchar(STDIN_FILENO, 300, &ch);
-        if (vm->quit)
+        if (vm->m_quit)
             break;
         if (ch == EOF)
             break;
@@ -104,16 +104,16 @@ void *keyboard_thread_func(void *arg)
             if (ch == 0x03) {
                 kill(getpid(), SIGINT);
             } else if (ch == 0x01) {
-                vm->serial->write((char)0x01);
+                vm->m_serial->write((char)0x01);
             } else {
-                vm->serial->write((char)0x01);
-                vm->serial->write((char)ch);
+                vm->m_serial->write((char)0x01);
+                vm->m_serial->write((char)ch);
             }
         } else {
             if (ch == 0x01) {
                 escaped = 1;
             } else {
-                vm->serial->write((char)ch);
+                vm->m_serial->write((char)ch);
             }
         }
     }
@@ -132,7 +132,7 @@ void sigint_handler(int sig)
 void sigterm_handler(int sig)
 {
     (void)sig;
-    mvvm_shutdown(g_vm);
+    g_vm->shutdown();
 }
 
 struct cmd_opts {
@@ -303,13 +303,12 @@ using namespace mvvmm;
 
 int main(int argc, char **argv)
 {
-    struct mvvm vm = {0};
+    struct mvvm vm{};
     struct cmd_opts opts = parse_opts(argc, argv);
-    vm = (struct mvvm){0};
-    if (mvvm_init(&vm, opts.memory_size, opts.disk_path, opts.tap_ifname) < 0) {
+    if (vm.init(opts.memory_size, opts.disk_path, opts.tap_ifname) < 0) {
         return -1;
     }
-    if (mvvm_load_kernel(&vm, opts.kernel_path, opts.initrd_path, opts.kernel_cmdline) < 0) {
+    if (vm.load_kernel(opts.kernel_path, opts.initrd_path, opts.kernel_cmdline) < 0) {
         return -1;
     }
     pthread_t keyboard_thread = {0};
@@ -320,10 +319,9 @@ int main(int argc, char **argv)
     g_vm = &vm;
     signal(SIGINT, sigint_handler);
     signal(SIGTERM, sigterm_handler);
-    std::thread vm_th{[&]() { mvvm_run(&vm); }};
+    std::thread vm_th{[&]() { vm.run(); }};
     vm_th.join();
-    vm.quit = true;
+    vm.set_quit(true);
     pthread_join(keyboard_thread, NULL);
-    mvvm_destroy(&vm);
     return 0;
 }

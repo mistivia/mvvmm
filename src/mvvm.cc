@@ -18,7 +18,6 @@
 
 #include <errno.h>
 #include <memory>
-#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -40,7 +39,7 @@
 
 namespace mvvmm {
 
-static void set_flat_mode(struct kvm_segment *seg)
+void mvvm::set_flat_mode(struct kvm_segment *seg)
 {
     seg->base = 0;
     seg->limit = 0xffffffff;
@@ -48,7 +47,7 @@ static void set_flat_mode(struct kvm_segment *seg)
     seg->db = 1;
 }
 
-int init_cpu(int kvm_fd, int cpu_fd)
+int mvvm::init_cpu(int kvm_fd, int cpu_fd)
 {
     struct kvm_sregs sregs = {0};
     struct kvm_regs regs = {0};
@@ -108,44 +107,44 @@ int init_cpu(int kvm_fd, int cpu_fd)
 #define RESERVED_ADDR 0xFFFBD000ULL
 #define RESERVED_SIZE (RESERVED_PAGES * PAGE_SIZE)
 
-int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char *network)
+int mvvm::init(uint64_t mem_size, const char *disk, const char *network)
 {
     struct kvm_pit_config pit = {0};
     struct kvm_userspace_memory_region mem = {0};
     uint64_t tss_addr = RESERVED_ADDR;
     uint64_t identity_map_addr = RESERVED_ADDR + TSS_PAGES * PAGE_SIZE;
-    self->quit = 0;
+    m_quit = 0;
     // Open KVM device
-    self->kvm_fd = open("/dev/kvm", O_RDWR | O_CLOEXEC);
-    if (self->kvm_fd < 0) {
+    m_kvm_fd = open("/dev/kvm", O_RDWR | O_CLOEXEC);
+    if (m_kvm_fd < 0) {
         fprintf(stderr, "failed to open /dev/kvm\n");
         return -1;
     }
     // Create virtual machine
-    self->vm_fd = ioctl(self->kvm_fd, KVM_CREATE_VM, 0);
-    if (self->vm_fd < 0) {
+    m_vm_fd = ioctl(m_kvm_fd, KVM_CREATE_VM, 0);
+    if (m_vm_fd < 0) {
         fprintf(stderr, "failed to create vm\n");
         return -1;
     }
     // Create IRQ chip for interrupt handling
-    if (ioctl(self->vm_fd, KVM_CREATE_IRQCHIP, 0) < 0) {
+    if (ioctl(m_vm_fd, KVM_CREATE_IRQCHIP, 0) < 0) {
         fprintf(stderr, "failed to create irqchip\n");
         return -1;
     }
     // Create PIT for timer interrupts
-    if (ioctl(self->vm_fd, KVM_CREATE_PIT2, &pit) < 0) {
+    if (ioctl(m_vm_fd, KVM_CREATE_PIT2, &pit) < 0) {
         fprintf(stderr, "failed to create pit\n");
         return -1;
     }
 
     // Set TSS address (3 pages)
-    if (ioctl(self->vm_fd, KVM_SET_TSS_ADDR, tss_addr) < 0) {
+    if (ioctl(m_vm_fd, KVM_SET_TSS_ADDR, tss_addr) < 0) {
         fprintf(stderr, "failed to set TSS address\n");
         return -1;
     }
 
     // Set Identity Map address (1 page)
-    if (ioctl(self->vm_fd, KVM_SET_IDENTITY_MAP_ADDR, &identity_map_addr) < 0) {
+    if (ioctl(m_vm_fd, KVM_SET_IDENTITY_MAP_ADDR, &identity_map_addr) < 0) {
         fprintf(stderr, "failed to set identity map address\n");
         return -1;
     }
@@ -163,7 +162,7 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char
         return -1;
     }
     mem_map->size = mem_size;
-    self->mem_map = mem_map;
+    m_mem_map = mem_map;
 
     // Register memory regions with KVM
     if (mem_size <= RESERVED_ADDR) {
@@ -172,7 +171,7 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char
         mem.guest_phys_addr = 0;
         mem.memory_size = mem_size;
         mem.userspace_addr = (uint64_t)mem_map->host_mem;
-        if (ioctl(self->vm_fd, KVM_SET_USER_MEMORY_REGION, &mem) < 0) {
+        if (ioctl(m_vm_fd, KVM_SET_USER_MEMORY_REGION, &mem) < 0) {
             fprintf(stderr, "failed to set user memory region\n");
             return -1;
         }
@@ -182,7 +181,7 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char
         mem.guest_phys_addr = 0;
         mem.memory_size = RESERVED_ADDR;
         mem.userspace_addr = (uint64_t)mem_map->host_mem;
-        if (ioctl(self->vm_fd, KVM_SET_USER_MEMORY_REGION, &mem) < 0) {
+        if (ioctl(m_vm_fd, KVM_SET_USER_MEMORY_REGION, &mem) < 0) {
             fprintf(stderr, "failed to set user memory region 0\n");
             return -1;
         }
@@ -193,33 +192,33 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char
             mem.guest_phys_addr = region1_start;
             mem.memory_size = mem_size - region1_start;
             mem.userspace_addr = (uint64_t)mem_map->host_mem + region1_start;
-            if (ioctl(self->vm_fd, KVM_SET_USER_MEMORY_REGION, &mem) < 0) {
+            if (ioctl(m_vm_fd, KVM_SET_USER_MEMORY_REGION, &mem) < 0) {
                 fprintf(stderr, "failed to set user memory region 1\n");
                 return -1;
             }
         }
     }
     // Create virtual CPU
-    self->cpu_fd = ioctl(self->vm_fd, KVM_CREATE_VCPU, 0);
-    if (self->cpu_fd < 0) {
+    m_cpu_fd = ioctl(m_vm_fd, KVM_CREATE_VCPU, 0);
+    if (m_cpu_fd < 0) {
         fprintf(stderr, "failed to create vcpu\n");
         return -1;
     }
-    if (init_cpu(self->kvm_fd, self->cpu_fd) < 0) {
+    if (init_cpu(m_kvm_fd, m_cpu_fd) < 0) {
         fprintf(stderr, "cpu init failed.\n");
         return -1;
     }
     // Initialize serial port
-    self->serial = std::make_unique<serial>(self);
+    m_serial = std::make_unique<serial>(this);
     // init virtio block device
     if (disk != NULL) {
-        if (mvvm_init_virtio_blk(self, disk) < 0) {
+        if (mvvm_init_virtio_blk(this, disk) < 0) {
             fprintf(stderr, "mvvm init error, failed to load disk.\n");
             return -1;
         }
     }
     if (network != NULL) {
-        if (mvvm_init_virtio_net(self, "vm0") < 0) {
+        if (mvvm_init_virtio_net(this, "vm0") < 0) {
             fprintf(stderr, "mvvm init error, failed to open tap interface.\n");
             return -1;
         }
@@ -227,15 +226,15 @@ int mvvm_init(struct mvvm *self, uint64_t mem_size, const char *disk, const char
     return 0;
 }
 
-void mvvm_destroy(struct mvvm *self)
+mvvm::~mvvm()
 {
-    munmap(self->mem_map->host_mem, self->mem_map->size);
-    close(self->cpu_fd);
-    close(self->vm_fd);
-    close(self->kvm_fd);
-    mvvm_destroy_virtio_blk(self);
-    mvvm_destroy_virtio_net(self);
-    free(self->mem_map);
+    munmap(m_mem_map->host_mem, m_mem_map->size);
+    close(m_cpu_fd);
+    close(m_vm_fd);
+    close(m_kvm_fd);
+    mvvm_destroy_virtio_blk(this);
+    mvvm_destroy_virtio_net(this);
+    free(m_mem_map);
 }
 
 static int map_file(const char *path, size_t *size, void **out)
@@ -268,7 +267,7 @@ static int map_file(const char *path, size_t *size, void **out)
 }
 
 // Setup E820 memory map in boot parameters.
-static void setup_e820_map(struct mvvm *vm, struct boot_params *zeropage)
+void mvvm::setup_e820_map(struct boot_params *zeropage)
 {
     zeropage->e820_entries = 2;
     // first 640KB
@@ -276,18 +275,18 @@ static void setup_e820_map(struct mvvm *vm, struct boot_params *zeropage)
     zeropage->e820_table[0].size = 0xA0000;
     zeropage->e820_table[0].type = 1;
     // > 1MB
-    if (vm->mem_map->size <= RESERVED_ADDR) {
+    if (m_mem_map->size <= RESERVED_ADDR) {
         zeropage->e820_table[1].addr = 0x100000;
-        zeropage->e820_table[1].size = vm->mem_map->size - 0x100000;
+        zeropage->e820_table[1].size = m_mem_map->size - 0x100000;
         zeropage->e820_table[1].type = 1;
     } else {
         zeropage->e820_table[1].addr = 0x100000;
         zeropage->e820_table[1].size = RESERVED_ADDR - 0x100000;
         zeropage->e820_table[1].type = 1;
-        if (vm->mem_map->size > RESERVED_ADDR + RESERVED_SIZE) {
+        if (m_mem_map->size > RESERVED_ADDR + RESERVED_SIZE) {
             zeropage->e820_entries = 3;
             zeropage->e820_table[2].addr = RESERVED_ADDR + RESERVED_SIZE;
-            zeropage->e820_table[2].size = vm->mem_map->size - (RESERVED_ADDR + RESERVED_SIZE);
+            zeropage->e820_table[2].size = m_mem_map->size - (RESERVED_ADDR + RESERVED_SIZE);
             zeropage->e820_table[2].type = 1;
         }
     }
@@ -295,7 +294,7 @@ static void setup_e820_map(struct mvvm *vm, struct boot_params *zeropage)
 
 // Load initrd into guest memory at 512MB mark.
 // initrd_path is guaranteed to exist.
-static int load_initrd(struct mvvm *vm, struct boot_params *zeropage, const char *initrd_path)
+int mvvm::load_initrd(struct boot_params *zeropage, const char *initrd_path)
 {
     if (initrd_path == NULL) {
         zeropage->hdr.ramdisk_image = 0;
@@ -321,11 +320,11 @@ static int load_initrd(struct mvvm *vm, struct boot_params *zeropage, const char
         perror("mmap initrd");
         return -1;
     }
-    if ((uint64_t)initrd_addr + st.st_size >= vm->mem_map->size) {
+    if ((uint64_t)initrd_addr + st.st_size >= m_mem_map->size) {
         fprintf(stderr, "failed to load initrd.\n");
         return -1;
     }
-    memcpy((uint8_t *)vm->mem_map->host_mem + initrd_addr, initrd, st.st_size);
+    memcpy((uint8_t *)m_mem_map->host_mem + initrd_addr, initrd, st.st_size);
     zeropage->hdr.ramdisk_image = initrd_addr;
     zeropage->hdr.ramdisk_size = st.st_size;
     // cleanup
@@ -351,8 +350,8 @@ char *cmdline_concat(char *buf, const char *new_arg)
     return ret;
 }
 
-int mvvm_load_kernel(struct mvvm *vm, const char *kernel_path, const char *initrd_path,
-                     const char *kernel_args)
+int mvvm::load_kernel(const char *kernel_path, const char *initrd_path,
+                      const char *kernel_args)
 {
     int ret = 0;
     void *bz_image = NULL;
@@ -379,20 +378,20 @@ int mvvm_load_kernel(struct mvvm *vm, const char *kernel_path, const char *initr
         goto end;
     }
     // Setup boot parameters at 0x10000
-    zeropage = (struct boot_params *)((uint8_t *)vm->mem_map->host_mem + 0x10000);
+    zeropage = (struct boot_params *)((uint8_t *)m_mem_map->host_mem + 0x10000);
     memset(zeropage, 0, sizeof(*zeropage));
     memcpy(&zeropage->hdr, (uint8_t *)bz_image + 0x01f1, sizeof(zeropage->hdr));
     // Setup E820 memory map
-    setup_e820_map(vm, zeropage);
+    setup_e820_map(zeropage);
     // Setup kernel loader info
     zeropage->hdr.type_of_loader = 0xFF;
     zeropage->hdr.loadflags |= LOADED_HIGH;
     zeropage->hdr.vid_mode = 0xFFFF;
     zeropage->hdr.cmd_line_ptr = 0x20000;
     // Copy command line
-    cmd_line = (char *)((uint8_t *)vm->mem_map->host_mem + 0x20000);
+    cmd_line = (char *)((uint8_t *)m_mem_map->host_mem + 0x20000);
     cmdline_buf = strdup(kernel_args);
-    if (vm->blk) {
+    if (m_blk) {
         cmdline_buf = cmdline_concat(cmdline_buf, VIRTIO_BLK_CMDLINE);
         if (cmdline_buf == NULL) {
             fprintf(stderr, "invalid kernel args.\n");
@@ -400,7 +399,7 @@ int mvvm_load_kernel(struct mvvm *vm, const char *kernel_path, const char *initr
             goto end;
         }
     }
-    if (vm->net) {
+    if (m_net) {
         cmdline_buf = cmdline_concat(cmdline_buf, VIRTIO_NET_CMDLINE);
         if (cmdline_buf == NULL) {
             fprintf(stderr, "invalid kernel args.\n");
@@ -417,14 +416,14 @@ int mvvm_load_kernel(struct mvvm *vm, const char *kernel_path, const char *initr
     memcpy(cmd_line, cmdline_buf, strnlen(cmdline_buf, 2000) + 1);
     free(cmdline_buf);
     // Load initrd
-    if (load_initrd(vm, zeropage, initrd_path) < 0) {
+    if (load_initrd(zeropage, initrd_path) < 0) {
         fprintf(stderr, "failed to load initrd\n");
         ret = -1;
         goto end;
     }
     // Copy protected mode kernel to 1MB
     setup_size = (zeropage->hdr.setup_sects + 1) * 512;
-    memcpy((uint8_t *)vm->mem_map->host_mem + 0x100000, (char *)bz_image + setup_size,
+    memcpy((uint8_t *)m_mem_map->host_mem + 0x100000, (char *)bz_image + setup_size,
            bz_image_size - setup_size);
     // cleanup
 end:
@@ -434,12 +433,12 @@ end:
     return ret;
 }
 
-static int handle_power(struct mvvm *vm, struct kvm_run *run)
+int mvvm::handle_power(struct kvm_run *run)
 {
     uint8_t *io_data = (uint8_t *)run + run->io.data_offset;
     if (run->io.direction == KVM_EXIT_IO_IN) {
-        *io_data = vm->power_cmd;
-        vm->power_cmd = 0;
+        *io_data = m_power_cmd;
+        m_power_cmd = 0;
         return 0;
     }
     if (run->io.direction == KVM_EXIT_IO_OUT) {
@@ -451,7 +450,7 @@ static int handle_power(struct mvvm *vm, struct kvm_run *run)
     return 0;
 }
 
-int mvvm_run(struct mvvm *vm)
+int mvvm::run()
 {
     int ret = 0;
     int mmap_size = 0;
@@ -459,20 +458,20 @@ int mvvm_run(struct mvvm *vm)
     virtio_device *virtiodev = NULL;
     uint64_t mmio_base_addr = 0;
 
-    mmap_size = ioctl(vm->kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
+    mmap_size = ioctl(m_kvm_fd, KVM_GET_VCPU_MMAP_SIZE, 0);
     if (mmap_size < 0) {
         perror("KVM_GET_VCPU_MMAP_SIZE");
         exit(-1);
     }
     // Map the shared memory region
     run =
-        (struct kvm_run *)mmap(NULL, mmap_size, PROT_READ | PROT_WRITE, MAP_SHARED, vm->cpu_fd, 0);
+        (struct kvm_run *)mmap(NULL, mmap_size, PROT_READ | PROT_WRITE, MAP_SHARED, m_cpu_fd, 0);
     if (run == MAP_FAILED) {
         perror("mmap kvm_run");
         exit(-1);
     }
     while (1) {
-        if (ioctl(vm->cpu_fd, KVM_RUN, 0) < 0) {
+        if (ioctl(m_cpu_fd, KVM_RUN, 0) < 0) {
             if (errno == EINTR)
                 continue;
             perror("KVM_RUN");
@@ -481,10 +480,10 @@ int mvvm_run(struct mvvm *vm)
         switch (run->exit_reason) {
         case KVM_EXIT_IO:
             if (run->io.port >= 0x3f8 && run->io.port <= 0x3ff) {
-                vm->serial->handle_io_event(run);
+                m_serial->handle_io_event(run);
             }
             if (run->io.port == 0x300) {
-                ret = handle_power(vm, run);
+                ret = handle_power(run);
                 if (ret != 0) {
                     goto exit_loop;
                 }
@@ -496,10 +495,10 @@ int mvvm_run(struct mvvm *vm)
             goto exit_loop;
         case KVM_EXIT_MMIO: {
             if (run->mmio.phys_addr >> 30 == 1024) {
-                virtiodev = vm->blk;
+                virtiodev = m_blk;
                 mmio_base_addr = VIRTIO_BLK_MMIO_ADDR;
             } else if (run->mmio.phys_addr >> 30 == 1025) {
-                virtiodev = vm->net;
+                virtiodev = m_net;
                 mmio_base_addr = VIRTIO_NET_MMIO_ADDR;
             } else {
                 break;
@@ -530,15 +529,23 @@ exit_loop:
     return ret;
 }
 
-void mvvm_shutdown(struct mvvm *vm)
+int mvvm::set_irq(int irq, int level)
 {
-    vm->power_cmd = 1;
-    struct kvm_irq_level irq = {0};
-    irq.irq = 5;
-    irq.level = 1;
-    ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq);
-    irq.level = 0;
-    ioctl(vm->vm_fd, KVM_IRQ_LINE, &irq);
+    struct kvm_irq_level irq_level = {0};
+    irq_level.irq = irq;
+    irq_level.level = level;
+    if (ioctl(m_vm_fd, KVM_IRQ_LINE, &irq_level) < 0) {
+        perror("KVM_IRQ_LINE");
+        return -1;
+    }
+    return 0;
+}
+
+void mvvm::shutdown()
+{
+    m_power_cmd = 1;
+    set_irq(5, 1);
+    set_irq(5, 0);
 }
 
 } // namespace mvvmm

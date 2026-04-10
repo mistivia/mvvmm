@@ -34,20 +34,14 @@ namespace mvvmm {
 
 void serial::set_irq()
 {
-    struct kvm_irq_level irq = {0};
-    irq.irq = 4;
-    irq.level = 1;
-    if (ioctl(m_vm->vm_fd, KVM_IRQ_LINE, &irq) != 0) {
+    if (m_vm->set_irq(4, 1) != 0) {
         fprintf(stderr, "failed to set irqline.\n");
     }
 }
 
 void serial::clear_irq()
 {
-    struct kvm_irq_level irq = {0};
-    irq.irq = 4;
-    irq.level = 0;
-    if (ioctl(m_vm->vm_fd, KVM_IRQ_LINE, &irq) != 0) {
+    if (m_vm->set_irq(4, 0) != 0) {
         fprintf(stderr, "failed to set irqline.\n");
     }
 }

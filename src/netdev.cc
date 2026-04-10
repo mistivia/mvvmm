@@ -179,16 +179,16 @@ int mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
     net->write_packet_to_ether = write_packet_to_ether;
     net->opaque = ctx;
 
-    irq.vmfd = self->vm_fd;
+    irq.vmfd = self->m_vm_fd;
     irq.irqline = VIRTIO_NET_IRQ;
 
     // Setup virtio bus definition
-    bus.mem_map = self->mem_map;
+    bus.mem_map = self->m_mem_map;
     bus.irq = irq;
 
     // Initialize virtio network device
-    self->net = virtio_net_init(bus, VIRTIO_NET_MMIO_ADDR, net);
-    if (!self->net) {
+    self->m_net = virtio_net_init(bus, VIRTIO_NET_MMIO_ADDR, net);
+    if (!self->m_net) {
         fprintf(stderr, "failed to initialize virtio net device\n");
         goto fail;
     }
@@ -216,15 +216,15 @@ fail:
 
 void mvvm_destroy_virtio_net(struct mvvm *self)
 {
-    struct tap_net_ctx *ctx = (struct tap_net_ctx *)virtio_net_get_opaque(self->net);
+    struct tap_net_ctx *ctx = (struct tap_net_ctx *)virtio_net_get_opaque(self->m_net);
     pthread_mutex_lock(&ctx->lock);
     ctx->quit = 1;
     pthread_mutex_unlock(&ctx->lock);
     void *ret = NULL;
     pthread_join(ctx->rx_thread, &ret);
     free(ctx);
-    virtio_net_destroy(self->net);
-    free(self->net);
+    virtio_net_destroy(self->m_net);
+    free(self->m_net);
 }
 
 } // namespace mvvmm

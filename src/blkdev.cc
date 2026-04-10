@@ -194,14 +194,14 @@ int mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     bs->write_async = block_write_async;
     bs->opaque = ctx;
 
-    irq.vmfd = self->vm_fd;
+    irq.vmfd = self->m_vm_fd;
     irq.irqline = VIRTIO_BLK_IRQ;
     // Setup virtio bus definition
-    bus.mem_map = self->mem_map;
+    bus.mem_map = self->m_mem_map;
     bus.irq = irq;
     // Initialize virtio block device
-    self->blk = virtio_block_init(bus, VIRTIO_BLK_MMIO_ADDR, bs);
-    if (!self->blk) {
+    self->m_blk = virtio_block_init(bus, VIRTIO_BLK_MMIO_ADDR, bs);
+    if (!self->m_blk) {
         fprintf(stderr, "failed to initialize virtio block device\n");
         goto fail;
     }
@@ -224,11 +224,11 @@ fail:
 
 void mvvm_destroy_virtio_blk(struct mvvm *self)
 {
-    struct block_device_ctx *ctx = (struct block_device_ctx *)virtio_block_get_opaque(self->blk);
+    struct block_device_ctx *ctx = (struct block_device_ctx *)virtio_block_get_opaque(self->m_blk);
     delete ctx->pool;
     free(ctx);
-    virtio_block_destroy(self->blk);
-    free(self->blk);
+    virtio_block_destroy(self->m_blk);
+    free(self->m_blk);
 }
 
 } // namespace mvvmm

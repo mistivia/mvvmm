@@ -15,10 +15,16 @@
  */
 
 #pragma once
+
 #include <stdlib.h>
 
 #include "virtio.h"
 #include "serial.h"
+
+extern "C" {
+    struct boot_params;
+    struct kvm_segment;
+}
 
 namespace mvvmm {
 
@@ -27,26 +33,38 @@ struct guest_mem_map {
     uint64_t size;
 };
 
-struct mvvm {
-    int kvm_fd;
-    int vm_fd;
-    int cpu_fd;
-    struct guest_mem_map *mem_map;
-    std::unique_ptr<mvvmm::serial> serial;
-    virtio_device *blk;
-    virtio_device *net;
-    int quit;
-    uint8_t power_cmd;
+class mvvm {
+public:
+    int init(uint64_t mem_size, const char *disk, const char *network);
+    int load_kernel(const char *kernel_path,
+                    const char *initrd_path, const char *kernel_args);
+    int run();
+    void set_quit(bool q) { m_quit = q; }
+    void shutdown();
+    int set_irq(int irq, int level);
+    ~mvvm();
+private:
+    static int init_cpu(int kvm_fd, int cpu_fd);
+    static void set_flat_mode(struct kvm_segment *seg);
+    void setup_e820_map(struct boot_params *zeropage);
+    int load_initrd(struct boot_params *zeropage, const char *initrd_path);
+    int handle_power(struct kvm_run *run);
+
+    int m_kvm_fd = -1;
+    int m_vm_fd = -1;
+    int m_cpu_fd = -1;
+    struct guest_mem_map *m_mem_map = nullptr;
+    std::unique_ptr<mvvmm::serial> m_serial;
+    virtio_device *m_blk = nullptr;
+    virtio_device *m_net = nullptr;
+    int m_quit = 0;
+    uint8_t m_power_cmd = 0;
+
+    friend void mvvm_destroy_virtio_blk(struct mvvm *self);
+    friend int mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path);
+    friend void *keyboard_thread_func(void *arg);
+    friend void mvvm_destroy_virtio_net(struct mvvm *self);
+    friend int mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname);
 };
-
-int mvvm_init(struct mvvm *vm, uint64_t mem_size, const char *disk, const char *network);
-int init_cpu(int kvm_fd, int cpu_fd);
-int mvvm_load_kernel(struct mvvm *vm, const char *kernel_path,
-                     const char *initrd_path, const char *kernel_args);
-int mvvm_run(struct mvvm *vm);
-void mvvm_destroy(struct mvvm *self);
-
-// must use with mvvmm guest module
-void mvvm_shutdown(struct mvvm *vm);
 
 } // namespace mvvmm
