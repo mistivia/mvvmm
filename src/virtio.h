@@ -29,7 +29,7 @@
 
 namespace mvvmm {
 
-typedef uint64_t virtio_phys_addr_t;
+using virtio_phys_addr_t = uint64_t;
 
 class irq_signal {
 public:
@@ -64,7 +64,7 @@ void virtio_mmio_write(virtio_device *s, uint32_t offset,
 
 /* block device */
 struct blk_io_callback_arg;
-typedef void block_device_comp_func(struct blk_io_callback_arg *callback_arg, int ret);
+using block_device_comp_func = void (*)(struct blk_io_callback_arg *callback_arg, int ret);
 
 struct disk_image {
     explicit disk_image() = default;
@@ -94,10 +94,10 @@ struct block_device {
     int64_t (*get_sector_count)(block_device *bs) = nullptr;
     int (*read_async)(block_device *bs,
                       uint64_t sector_num, uint8_t *buf, int n, // n is sector number
-                      block_device_comp_func *cb, struct blk_io_callback_arg *cbarg) = nullptr;
+                      block_device_comp_func cb, struct blk_io_callback_arg *cbarg) = nullptr;
     int (*write_async)(block_device *bs,
                        uint64_t sector_num, const uint8_t *buf, int n, // n is sector nubmer
-                       block_device_comp_func *cb, struct blk_io_callback_arg *cbarg) = nullptr;
+                       block_device_comp_func cb, struct blk_io_callback_arg *cbarg) = nullptr;
     void *opaque = nullptr;
 };
 
@@ -107,8 +107,7 @@ void virtio_block_destroy(virtio_device *s);
 void* virtio_block_get_opaque(virtio_device *s);
 
 /* network device */
-struct ethernet_device;
-typedef struct ethernet_device ethernet_device; 
+struct ethernet_device; 
 
 struct ethernet_device {
     explicit ethernet_device() = default;
@@ -154,11 +153,11 @@ struct VIRTIODesc{
 
 /* return < 0 to stop the notification (it must be manually restarted
    later), 0 if OK */
-typedef int virtio_deviceRecvFunc(virtio_device *s1, int queue_idx, int desc_idx, int read_size,
+using virtio_deviceRecvFunc = int (*)(virtio_device *s1, int queue_idx, int desc_idx, int read_size,
                                   int write_size);
 
 /* return NULL if no RAM at this address. The mapping is valid for one page */
-typedef uint8_t *VIRTIOGetRAMPtrFunc(virtio_device *s, virtio_phys_addr_t paddr);
+using VIRTIOGetRAMPtrFunc = uint8_t (*)(virtio_device *s, virtio_phys_addr_t paddr);
 
 struct virtio_device {
     explicit virtio_device() = default;
@@ -177,7 +176,7 @@ struct virtio_device {
     uint32_t device_id = 0;
     uint32_t vendor_id = 0;
     uint32_t device_features = 0;
-    virtio_deviceRecvFunc *device_recv = nullptr;
+    virtio_deviceRecvFunc device_recv = nullptr;
     uint32_t config_space_size = 0; /* in bytes, must be multiple of 4 */
     uint8_t config_space[VIRTIO_MAX_CONFIG_SPACE_SIZE] = {0};
     pthread_mutex_t lock = {0};
@@ -206,11 +205,11 @@ struct virtio_block_device {
     block_device *bs = nullptr;
 };
 
-typedef struct virtio_net_device {
+struct virtio_net_device {
     explicit virtio_net_device() = default;
     virtio_device common{};
     ethernet_device *es = nullptr;
     int header_size = 0;
-} virtio_net_device;
+};
 
 } // namespace mvvmm

@@ -48,7 +48,7 @@ struct async_io_req {
     uint64_t offset = 0;
     uint8_t *buf = nullptr;
     size_t count = 0;
-    block_device_comp_func *cb = nullptr;
+    block_device_comp_func cb = nullptr;
     void *opaque = nullptr;
     int is_write = 0;
 };
@@ -95,7 +95,7 @@ static int64_t block_get_sector_count(block_device *bs)
 
 // Asynchronous read operation using thread pool
 static int block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf, int n,
-                            block_device_comp_func *cb, struct blk_io_callback_arg *opaque)
+                            block_device_comp_func cb, struct blk_io_callback_arg *opaque)
 {
     struct block_device_ctx *ctx = (struct block_device_ctx *)bs->opaque;
     async_io_req *req = new async_io_req{};
@@ -122,7 +122,7 @@ static int block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf,
 
 // Asynchronous write operation using thread pool
 static int block_write_async(block_device *bs, uint64_t sector_num, const uint8_t *buf, int n,
-                             block_device_comp_func *cb, struct blk_io_callback_arg *opaque)
+                             block_device_comp_func cb, struct blk_io_callback_arg *opaque)
 {
     struct block_device_ctx *ctx = (struct block_device_ctx *)bs->opaque;
     async_io_req *req = new async_io_req{};

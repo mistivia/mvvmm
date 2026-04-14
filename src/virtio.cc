@@ -149,7 +149,7 @@ static uint8_t *guest_addr_to_host_addr(virtio_device *s, uint64_t guest_addr)
 }
 
 static int virtio_init(virtio_device *s, virtio_bus_def bus, uint64_t mmio_addr, uint32_t device_id,
-                       int config_space_size, virtio_deviceRecvFunc *device_recv, int max_queue_num)
+                       int config_space_size, virtio_deviceRecvFunc device_recv, int max_queue_num)
 {
     s->mem_map = bus.mem_map;
     s->vmfd = bus.vmfd;
@@ -859,11 +859,11 @@ end:
 /*********************************************************************/
 /* block device */
 
-typedef struct {
+struct block_request_header {
     uint32_t type;
     uint32_t ioprio;
     uint64_t sector_num;
-} block_request_header;
+};
 
 static void virtio_block_req_end(struct blk_io_callback_arg *arg, int ret)
 {
@@ -972,7 +972,7 @@ virtio_device *virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, block_d
     virtio_block_device *s = {0};
     uint64_t nb_sectors = {0};
     s = new virtio_block_device();
-    if (virtio_init(&s->common, std::move(bus), mmio_addr, 2, 8, virtio_block_recv_request,
+    if (virtio_init(&s->common, std::move(bus), mmio_addr, 2, 8, &virtio_block_recv_request,
                     VIRTIO_BLK_MAX_QUEUE_NUM) < 0) {
         delete s;
         return NULL;
