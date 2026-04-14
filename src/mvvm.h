@@ -29,6 +29,7 @@ extern "C" {
 namespace mvvmm {
 
 struct guest_mem_map {
+    explicit guest_mem_map() = default;
     void *host_mem;
     uint64_t size;
 };

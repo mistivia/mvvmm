@@ -67,23 +67,26 @@ struct blk_io_callback_arg;
 typedef void block_device_comp_func(struct blk_io_callback_arg *callback_arg, int ret);
 
 struct disk_image {
-    int fd;
-    uint64_t size;
+    explicit disk_image() = default;
+    int fd = -1;
+    uint64_t size = 0;
 };
 
-typedef struct block_device block_device;
+struct block_device;
 
-typedef struct {
-    uint32_t type;
-    uint8_t *buf;
-    int write_size;
-    int queue_idx;
-    int desc_idx;
-} block_request;
+struct block_request {
+    explicit block_request() = default;
+    uint32_t type = 0;
+    uint8_t *buf = nullptr;
+    int write_size = 0;
+    int queue_idx = 0;
+    int desc_idx = 0;
+} ;
 
 struct blk_io_callback_arg {
-    virtio_device *s;
-    block_request req;
+    explicit blk_io_callback_arg() = default;
+    virtio_device *s = nullptr;
+    block_request req{};
 };
 
 struct block_device {
@@ -127,23 +130,25 @@ void* virtio_net_get_opaque(virtio_device *s);
 constexpr static int VIRTIO_MAX_QUEUE = 2;
 constexpr static int VIRTIO_MAX_CONFIG_SPACE_SIZE = 256;
 
-typedef struct {
-    uint32_t ready; /* 0 or 1 */
-    uint32_t num;
-    uint16_t last_avail_idx;
-    virtio_phys_addr_t desc_addr;
-    virtio_phys_addr_t avail_addr;
-    virtio_phys_addr_t used_addr;
-    bool manual_recv; /* if true, the device_recv() callback is not called */
-} QueueState;
+struct QueueState {
+    explicit QueueState() = default;
+    uint32_t ready = 0; /* 0 or 1 */
+    uint32_t num = 0;
+    uint16_t last_avail_idx = 0;
+    virtio_phys_addr_t desc_addr = {0};
+    virtio_phys_addr_t avail_addr = {0};
+    virtio_phys_addr_t used_addr = {0};
+    bool manual_recv = {0}; /* if true, the device_recv() callback is not called */
+};
 
 
-typedef struct {
-    uint64_t addr;
-    uint32_t len;
-    uint16_t flags; /* VRING_DESC_F_x */
-    uint16_t next;
-} VIRTIODesc;
+struct VIRTIODesc{
+    explicit VIRTIODesc() = default;
+    uint64_t addr = 0;
+    uint32_t len = 0;
+    uint16_t flags = 0; /* VRING_DESC_F_x */
+    uint16_t next = 0;
+};
 
 /* return < 0 to stop the notification (it must be manually restarted
    later), 0 if OK */
@@ -157,14 +162,14 @@ struct virtio_device {
     explicit virtio_device() = default;
     struct guest_mem_map *mem_map = nullptr;
     /* MMIO only */
-    irq_signal irq;
+    irq_signal irq{};
     int vmfd = -1;
 
     uint32_t int_status = 0;
     uint32_t status = 0;
     uint32_t device_features_sel = 0;
     uint32_t queue_sel = 0; /* currently selected queue */
-    QueueState queue[VIRTIO_MAX_QUEUE] = {0};
+    QueueState queue[VIRTIO_MAX_QUEUE];
 
     /* device specific */
     uint32_t device_id = 0;
@@ -181,7 +186,7 @@ struct virtio_device {
     bool ioeventfd_enabled = 0;     /* whether ioeventfd is active */
 };
 
-typedef struct virtio_block_device {
+struct virtio_block_device {
     explicit virtio_block_device() = default;
     enum class cmd_type : uint32_t {
         in = 0,
@@ -195,13 +200,13 @@ typedef struct virtio_block_device {
         io_err = 1,
         unsupported = 2,
     };
-    virtio_device common;
+    virtio_device common{};
     block_device *bs = nullptr;
-} virtio_block_device;
+};
 
 typedef struct virtio_net_device {
     explicit virtio_net_device() = default;
-    virtio_device common;
+    virtio_device common{};
     ethernet_device *es = nullptr;
     int header_size = 0;
 } virtio_net_device;

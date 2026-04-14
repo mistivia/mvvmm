@@ -268,7 +268,7 @@ static int get_desc(virtio_device *s, VIRTIODesc *desc, int queue_idx, int desc_
 static int memcpy_to_from_queue(virtio_device *s, uint8_t *buf, int queue_idx, int desc_idx,
                                 int offset, int count, bool to_queue)
 {
-    VIRTIODesc desc = {0};
+    VIRTIODesc desc{};
     int l, f_write_flag = {0};
 
     if (count == 0)
@@ -578,7 +578,7 @@ static void virtio_consume_desc(virtio_device *s, int queue_idx, int desc_idx, i
 static int get_desc_rw_size(virtio_device *s, int *pread_size, int *pwrite_size, int queue_idx,
                             int desc_idx)
 {
-    VIRTIODesc desc = {0};
+    VIRTIODesc desc{};
     int read_size, write_size = {0};
 
     read_size = 0;
@@ -922,9 +922,7 @@ static int virtio_block_recv_request(virtio_device *s, int queue_idx, int desc_i
 
     if (memcpy_from_queue(s, &h, queue_idx, desc_idx, 0, sizeof(h)) < 0)
         return 0;
-    struct blk_io_callback_arg *iocb_arg =
-        (struct blk_io_callback_arg *)malloc(sizeof(struct blk_io_callback_arg));
-    *iocb_arg = (struct blk_io_callback_arg){0};
+    auto iocb_arg = new blk_io_callback_arg{};
     iocb_arg->s = s;
     iocb_arg->req.type = h.type;
     iocb_arg->req.queue_idx = queue_idx;
@@ -938,7 +936,7 @@ static int virtio_block_recv_request(virtio_device *s, int queue_idx, int desc_i
                              virtio_block_req_cb, iocb_arg);
         if (ret < 0) {
             virtio_block_req_end(iocb_arg, ret);
-            free(iocb_arg);
+            delete iocb_arg;
         }
         break;
     case (uint32_t)virtio_block_device::cmd_type::out:
@@ -959,7 +957,7 @@ static int virtio_block_recv_request(virtio_device *s, int queue_idx, int desc_i
         if (ret < 0) {
             free(buf);
             virtio_block_req_end(iocb_arg, ret);
-            free(iocb_arg);
+            delete iocb_arg;
         }
         break;
     default:
