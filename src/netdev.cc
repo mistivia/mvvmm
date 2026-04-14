@@ -34,11 +34,12 @@
 namespace mvvmm {
 
 struct tap_net_ctx {
-    int fd;
-    char ifname[IFNAMSIZ];
-    pthread_t rx_thread;
-    int quit;
-    pthread_mutex_t lock;
+    explicit tap_net_ctx() = default;
+    int fd = -1;
+    char ifname[IFNAMSIZ] = {0};
+    pthread_t rx_thread = {0};
+    int quit = 0;
+    pthread_mutex_t lock = {0};
 };
 
 static void write_packet_to_ether(ethernet_device *net, const uint8_t *buf, int len)
@@ -129,7 +130,7 @@ int mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
     int ret = -1;
 
     // Allocate TAP device context
-    ctx = (struct tap_net_ctx *)malloc(sizeof(*ctx));
+    ctx = new tap_net_ctx{};
     if (!ctx) {
         fprintf(stderr, "failed to allocate TAP network context\n");
         return -1;
@@ -160,7 +161,7 @@ int mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
     ctx->ifname[IFNAMSIZ - 1] = '\0';
 
     // Allocate and initialize ethernet_device structure
-    net = (ethernet_device *)malloc(sizeof(*net));
+    net = new ethernet_device{};
     if (!net) {
         fprintf(stderr, "failed to allocate ethernet_device structure\n");
         goto fail;
@@ -207,7 +208,7 @@ fail:
         if (ctx->fd >= 0) {
             close(ctx->fd);
         }
-        free(ctx);
+        delete ctx;
     }
     return ret;
 }

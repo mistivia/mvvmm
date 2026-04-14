@@ -23,6 +23,7 @@
  * THE SOFTWARE.
  */
 
+#include <cstdint>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -929,7 +930,7 @@ static int virtio_block_recv_request(virtio_device *s, int queue_idx, int desc_i
     iocb_arg->req.desc_idx = desc_idx;
     switch (h.type) {
     case (uint32_t)virtio_block_device::cmd_type::in:
-        iocb_arg->req.buf = (uint8_t *)malloc(write_size);
+        iocb_arg->req.buf = new uint8_t[write_size];
         memset(iocb_arg->req.buf, 0, write_size);
         iocb_arg->req.write_size = write_size;
         ret = bs->read_async(bs, h.sector_num, iocb_arg->req.buf, (write_size - 1) / SECTOR_SIZE,
@@ -949,13 +950,13 @@ static int virtio_block_recv_request(virtio_device *s, int queue_idx, int desc_i
             fprintf(stderr, "virtio_block_recv_request invalid read_size.\n");
             abort();
         }
-        buf = (uint8_t *)malloc(len);
+        buf = new uint8_t[len];
         memset(buf, 0, len);
         memcpy_from_queue(s, buf, queue_idx, desc_idx, sizeof(h), len);
         ret = bs->write_async(bs, h.sector_num, buf, len / SECTOR_SIZE, virtio_block_req_cb,
                               iocb_arg);
         if (ret < 0) {
-            free(buf);
+            delete[] buf;
             virtio_block_req_end(iocb_arg, ret);
             delete iocb_arg;
         }
@@ -1023,11 +1024,11 @@ static int virtio_net_recv_request(virtio_device *s, int queue_idx, int desc_idx
     if (memcpy_from_queue(s, &h, queue_idx, desc_idx, 0, s1->header_size) < 0)
         return 0;
     len = read_size - s1->header_size;
-    buf = (uint8_t *)malloc(len);
+    buf = new uint8_t[len];
     memset(buf, 0, len);
     memcpy_from_queue(s, buf, queue_idx, desc_idx, s1->header_size, len);
     es->write_packet_to_ether(es, buf, len);
-    free(buf);
+    delete[] buf;
     virtio_consume_desc(s, queue_idx, desc_idx, 0);
     return 0;
 }

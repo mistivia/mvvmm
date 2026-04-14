@@ -90,14 +90,15 @@ struct blk_io_callback_arg {
 };
 
 struct block_device {
-    int64_t (*get_sector_count)(block_device *bs);
+    explicit block_device() = default;
+    int64_t (*get_sector_count)(block_device *bs) = nullptr;
     int (*read_async)(block_device *bs,
                       uint64_t sector_num, uint8_t *buf, int n, // n is sector number
-                      block_device_comp_func *cb, struct blk_io_callback_arg *cbarg);
+                      block_device_comp_func *cb, struct blk_io_callback_arg *cbarg) = nullptr;
     int (*write_async)(block_device *bs,
                        uint64_t sector_num, const uint8_t *buf, int n, // n is sector nubmer
-                       block_device_comp_func *cb, struct blk_io_callback_arg *cbarg);
-    void *opaque;
+                       block_device_comp_func *cb, struct blk_io_callback_arg *cbarg) = nullptr;
+    void *opaque = nullptr;
 };
 
 virtio_device *virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, block_device *bs);
@@ -110,15 +111,16 @@ struct ethernet_device;
 typedef struct ethernet_device ethernet_device; 
 
 struct ethernet_device {
-    uint8_t mac_addr[6]; /* mac address of the interface */
+    explicit ethernet_device() = default;
+    uint8_t mac_addr[6] = {0}; /* mac address of the interface */
     void (*write_packet_to_ether)(ethernet_device *net,
-                                  const uint8_t *buf, int len);
-    void *opaque;
+                                  const uint8_t *buf, int len) = nullptr;
+    void *opaque = nullptr;
     /* the following is set by the device */
-    void *device_opaque;
-    bool (*can_write_packet_to_virtio)(ethernet_device *net);
+    void *device_opaque = nullptr;
+    bool (*can_write_packet_to_virtio)(ethernet_device *net) = nullptr;
     void (*write_packet_to_virtio)(ethernet_device *net,
-                                const uint8_t *buf, int len);
+                                const uint8_t *buf, int len) = nullptr;
 
 };
 

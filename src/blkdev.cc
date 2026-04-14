@@ -35,20 +35,22 @@ class thread_pool;
 // Context for block device operations using thread pool
 
 struct block_device_ctx {
-    int fd;
-    uint64_t size;
-    thread_pool *pool;
+    explicit block_device_ctx() = default;
+    int fd = -1;
+    uint64_t size = 0;
+    thread_pool *pool = nullptr;
 };
 
 // Request structure passed to worker threads for async I/O
 struct async_io_req {
-    int fd;
-    uint64_t offset;
-    uint8_t *buf;
-    size_t count;
-    block_device_comp_func *cb;
-    void *opaque;
-    int is_write;
+    explicit async_io_req() = default;
+    int fd = -1;
+    uint64_t offset = 0;
+    uint8_t *buf = nullptr;
+    size_t count = 0;
+    block_device_comp_func *cb = nullptr;
+    void *opaque = nullptr;
+    int is_write = 0;
 };
 
 // Worker function executed by thread pool for disk I/O operations
@@ -61,7 +63,7 @@ static void *block_io_worker_fn(void *arg)
     // Perform actual I/O using pread/pwrite for thread safety
     if (req->is_write) {
         n = pwrite(req->fd, req->buf, req->count, req->offset);
-        free(req->buf);
+        delete[] req->buf;
     } else {
         n = pread(req->fd, req->buf, req->count, req->offset);
     }
@@ -80,7 +82,7 @@ static void *block_io_worker_fn(void *arg)
         req->cb((struct blk_io_callback_arg *)req->opaque, ret);
     }
 
-    free(req);
+    delete req;
     return NULL;
 }
 
@@ -96,9 +98,8 @@ static int block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf,
                             block_device_comp_func *cb, struct blk_io_callback_arg *opaque)
 {
     struct block_device_ctx *ctx = (struct block_device_ctx *)bs->opaque;
-    struct async_io_req *req = NULL;
+    async_io_req *req = new async_io_req{};
 
-    req = (struct async_io_req *)malloc(sizeof(*req));
     if (!req) {
         return -1;
     }
@@ -112,7 +113,7 @@ static int block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf,
     req->is_write = 0;
 
     if (ctx->pool->run([req]() { block_io_worker_fn(req); }) < 0) {
-        free(req);
+        delete req;
         return -1;
     }
 
@@ -124,13 +125,7 @@ static int block_write_async(block_device *bs, uint64_t sector_num, const uint8_
                              block_device_comp_func *cb, struct blk_io_callback_arg *opaque)
 {
     struct block_device_ctx *ctx = (struct block_device_ctx *)bs->opaque;
-    struct async_io_req *req = NULL;
-    ;
-
-    req = (struct async_io_req *)malloc(sizeof(*req));
-    if (!req) {
-        return -ENOMEM;
-    }
+    async_io_req *req = new async_io_req{};
 
     req->fd = ctx->fd;
     req->offset = sector_num * SECTOR_SIZE;
@@ -142,7 +137,7 @@ static int block_write_async(block_device *bs, uint64_t sector_num, const uint8_
     req->is_write = 1;
 
     if (ctx->pool->run([req]() { block_io_worker_fn(req); }) < 0) {
-        free(req);
+        delete req;
         return -1;
     }
 
@@ -158,7 +153,7 @@ int mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     virtio_bus_def bus{};
     int ret = -1;
     // Allocate block device context
-    ctx = (struct block_device_ctx *)malloc(sizeof(*ctx));
+    ctx = new block_device_ctx{};
     if (!ctx) {
         fprintf(stderr, "failed to allocate block device context\n");
         return -1;
@@ -182,7 +177,7 @@ int mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
         goto fail;
     }
     // Allocate and initialize block_device structure
-    bs = (block_device *)malloc(sizeof(*bs));
+    bs = new block_device{};
     if (!bs) {
         fprintf(stderr, "failed to allocate block_device structure\n");
         goto fail;
@@ -208,13 +203,13 @@ int mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
 
 fail:
     if (bs) {
-        free(bs);
+        delete bs;
     }
     if (ctx) {
         if (ctx->fd >= 0) {
             close(ctx->fd);
         }
-        free(ctx);
+        delete ctx;
     }
     return ret;
 }
@@ -223,7 +218,7 @@ void mvvm_destroy_virtio_blk(struct mvvm *self)
 {
     struct block_device_ctx *ctx = (struct block_device_ctx *)virtio_block_get_opaque(self->m_blk);
     delete ctx->pool;
-    free(ctx);
+    delete ctx;
     virtio_block_destroy(self->m_blk);
     free(self->m_blk);
 }

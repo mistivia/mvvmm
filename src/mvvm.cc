@@ -150,7 +150,7 @@ int mvvm::init(uint64_t mem_size, const char *disk, const char *network)
     }
 
     // Allocate guest memory
-    struct guest_mem_map *mem_map = (struct guest_mem_map *)malloc(sizeof(*mem_map));
+    struct guest_mem_map *mem_map = new guest_mem_map{};
     if (!mem_map) {
         fprintf(stderr, "failed to allocate PhysMemoryMap\n");
         return -1;
