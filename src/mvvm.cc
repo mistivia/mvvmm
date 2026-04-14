@@ -18,6 +18,7 @@
 
 #include <errno.h>
 #include <memory>
+#include <string>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -333,23 +334,6 @@ int mvvm::load_initrd(struct boot_params *zeropage, const char *initrd_path)
     return 0;
 }
 
-char *cmdline_concat(char *buf, const char *new_arg)
-{
-    char *ret = NULL;
-    size_t n1 = strnlen(buf, 2000);
-    size_t n2 = strlen(new_arg);
-    if (n1 + n2 >= 2000) {
-        free(buf);
-        return NULL;
-    }
-    ret = (char *)malloc(n1 + n2 + 1);
-    memcpy(ret, buf, n1);
-    memcpy(ret + n1, new_arg, n2);
-    ret[n1 + n2] = 0;
-    free(buf);
-    return ret;
-}
-
 int mvvm::load_kernel(const char *kernel_path, const char *initrd_path,
                       const char *kernel_args)
 {
@@ -359,7 +343,7 @@ int mvvm::load_kernel(const char *kernel_path, const char *initrd_path,
     uint32_t setup_size = 0;
     struct boot_params *zeropage = NULL;
     char *cmd_line = NULL;
-    char *cmdline_buf = NULL;
+    std::string cmdline_buf{};
 
     if (map_file(kernel_path, &bz_image_size, &bz_image) < 0) {
         bz_image = NULL;
@@ -390,31 +374,19 @@ int mvvm::load_kernel(const char *kernel_path, const char *initrd_path,
     zeropage->hdr.cmd_line_ptr = 0x20000;
     // Copy command line
     cmd_line = (char *)((uint8_t *)m_mem_map->host_mem + 0x20000);
-    cmdline_buf = strdup(kernel_args);
+    cmdline_buf = kernel_args;
     if (m_blk) {
-        cmdline_buf = cmdline_concat(cmdline_buf, VIRTIO_BLK_CMDLINE);
-        if (cmdline_buf == NULL) {
-            fprintf(stderr, "invalid kernel args.\n");
-            ret = -1;
-            goto end;
-        }
+        cmdline_buf.append(VIRTIO_BLK_CMDLINE);
     }
     if (m_net) {
-        cmdline_buf = cmdline_concat(cmdline_buf, VIRTIO_NET_CMDLINE);
-        if (cmdline_buf == NULL) {
-            fprintf(stderr, "invalid kernel args.\n");
-            ret = -1;
-            goto end;
-        }
+        cmdline_buf.append(VIRTIO_NET_CMDLINE);
     }
-    if (strnlen(cmdline_buf, 2000) >= 2000) {
+    if (cmdline_buf.size() >= 2000) {
         fprintf(stderr, "invalid kernel args.\n");
-        free(cmdline_buf);
         ret = -1;
         goto end;
     }
-    memcpy(cmd_line, cmdline_buf, strnlen(cmdline_buf, 2000) + 1);
-    free(cmdline_buf);
+    memcpy(cmd_line, cmdline_buf.c_str(), cmdline_buf.size() + 1);
     // Load initrd
     if (load_initrd(zeropage, initrd_path) < 0) {
         fprintf(stderr, "failed to load initrd\n");
