@@ -154,9 +154,8 @@ int mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
 {
     struct block_device_ctx *ctx = NULL;
     block_device *bs = NULL;
-    struct irq_signal irq = {0};
     struct stat st = {0};
-    virtio_bus_def bus = {0};
+    virtio_bus_def bus{};
     int ret = -1;
     // Allocate block device context
     ctx = (struct block_device_ctx *)malloc(sizeof(*ctx));
@@ -194,11 +193,9 @@ int mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     bs->write_async = block_write_async;
     bs->opaque = ctx;
 
-    irq.vmfd = self->m_vm_fd;
-    irq.irqline = VIRTIO_BLK_IRQ;
-    // Setup virtio bus definition
+    bus.vmfd = self->m_vm_fd;
+    bus.irqline = VIRTIO_BLK_IRQ;
     bus.mem_map = self->m_mem_map;
-    bus.irq = irq;
     // Initialize virtio block device
     self->m_blk = virtio_block_init(bus, VIRTIO_BLK_MMIO_ADDR, bs);
     if (!self->m_blk) {

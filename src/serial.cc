@@ -121,9 +121,6 @@ void serial::write(char c)
 {
     std::unique_lock<std::mutex> lk{m_rx_lock};
     while (!is_rx_empty()) {
-        struct timespec ts;
-        clock_gettime(CLOCK_REALTIME, &ts);
-        ts.tv_sec += 3;
         auto cond_ret = m_rx_cond.wait_for(lk, std::chrono::seconds(3));
         if (cond_ret == std::cv_status::timeout) {
             return;

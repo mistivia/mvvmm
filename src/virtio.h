@@ -25,34 +25,42 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include <pthread.h>
 
 namespace mvvmm {
 
 typedef uint64_t virtio_phys_addr_t;
 
-struct irq_signal {
-    int vmfd;
-    int irqline;
-    int irqfd;  /* eventfd for irqfd mechanism */
+class irq_signal {
+public:
+    irq_signal() {}
+    ~irq_signal();
+    irq_signal(const irq_signal&) = delete;
+    irq_signal& operator=(const irq_signal&) = delete;
+    irq_signal(irq_signal&&); 
+    irq_signal& operator=(irq_signal&&);
+    int init(int vm_fd, int irq_line);
+    void set_irq(int level);
+    void trigger();
+private:
+    void swap(irq_signal& other) noexcept;
+    int m_vmfd = -1;
+    int m_irqline = -1;
+    int m_irqfd = -1;
 };
-typedef struct irq_signal irq_signal;
 
-typedef struct {
-    struct guest_mem_map *mem_map;
-    irq_signal irq;
-} virtio_bus_def;
+struct virtio_bus_def {
+    explicit virtio_bus_def() = default;
+    struct guest_mem_map *mem_map = nullptr;
+    int vmfd = -1;
+    int irqline = -1;
+};
 
-/* irqfd functions */
-int virtio_irqfd_init(irq_signal *irq);
-void virtio_irqfd_cleanup(irq_signal *irq);
-
-typedef struct virtio_device virtio_device; 
+struct virtio_device;
 
 uint32_t virtio_mmio_read(virtio_device *s, uint32_t offset1, int size);
 void virtio_mmio_write(virtio_device *s, uint32_t offset,
                        uint32_t val, int size);
-
-void virtio_set_debug(virtio_device *s, int debug_flags);
 
 /* block device */
 struct blk_io_callback_arg;
@@ -115,5 +123,87 @@ virtio_device *virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, ethernet_
 
 void virtio_net_destroy(virtio_device *s);
 void* virtio_net_get_opaque(virtio_device *s);
+
+constexpr static int VIRTIO_MAX_QUEUE = 2;
+constexpr static int VIRTIO_MAX_CONFIG_SPACE_SIZE = 256;
+
+typedef struct {
+    uint32_t ready; /* 0 or 1 */
+    uint32_t num;
+    uint16_t last_avail_idx;
+    virtio_phys_addr_t desc_addr;
+    virtio_phys_addr_t avail_addr;
+    virtio_phys_addr_t used_addr;
+    bool manual_recv; /* if true, the device_recv() callback is not called */
+} QueueState;
+
+
+typedef struct {
+    uint64_t addr;
+    uint32_t len;
+    uint16_t flags; /* VRING_DESC_F_x */
+    uint16_t next;
+} VIRTIODesc;
+
+/* return < 0 to stop the notification (it must be manually restarted
+   later), 0 if OK */
+typedef int virtio_deviceRecvFunc(virtio_device *s1, int queue_idx, int desc_idx, int read_size,
+                                  int write_size);
+
+/* return NULL if no RAM at this address. The mapping is valid for one page */
+typedef uint8_t *VIRTIOGetRAMPtrFunc(virtio_device *s, virtio_phys_addr_t paddr);
+
+struct virtio_device {
+    explicit virtio_device() = default;
+    struct guest_mem_map *mem_map = nullptr;
+    /* MMIO only */
+    irq_signal irq;
+    int vmfd = -1;
+
+    uint32_t int_status = 0;
+    uint32_t status = 0;
+    uint32_t device_features_sel = 0;
+    uint32_t queue_sel = 0; /* currently selected queue */
+    QueueState queue[VIRTIO_MAX_QUEUE] = {0};
+
+    /* device specific */
+    uint32_t device_id = 0;
+    uint32_t vendor_id = 0;
+    uint32_t device_features = 0;
+    virtio_deviceRecvFunc *device_recv = nullptr;
+    uint32_t config_space_size = 0; /* in bytes, must be multiple of 4 */
+    uint8_t config_space[VIRTIO_MAX_CONFIG_SPACE_SIZE] = {0};
+    pthread_mutex_t lock = {0};
+    int max_queue_num = 0;
+    uint64_t mmio_addr = 0;         /* MMIO base address */
+    int ioeventfd[VIRTIO_MAX_QUEUE] = {0};   /* eventfd for each queue notify */
+    pthread_t ioeventfd_thread = 0; /* thread polling ioeventfds */
+    bool ioeventfd_enabled = 0;     /* whether ioeventfd is active */
+};
+
+typedef struct virtio_block_device {
+    explicit virtio_block_device() = default;
+    enum class cmd_type : uint32_t {
+        in = 0,
+        out = 1,
+        flush = 4,
+        flush_out = 5,
+    };
+
+    enum class result_type {
+        ok = 0,
+        io_err = 1,
+        unsupported = 2,
+    };
+    virtio_device common;
+    block_device *bs = nullptr;
+} virtio_block_device;
+
+typedef struct virtio_net_device {
+    explicit virtio_net_device() = default;
+    virtio_device common;
+    ethernet_device *es = nullptr;
+    int header_size = 0;
+} virtio_net_device;
 
 } // namespace mvvmm

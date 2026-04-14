@@ -124,8 +124,7 @@ int mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
 {
     struct tap_net_ctx *ctx = NULL;
     ethernet_device *net = NULL;
-    struct irq_signal irq = {0};
-    virtio_bus_def bus = {0};
+    virtio_bus_def bus;
     struct ifreq ifr = {0};
     int ret = -1;
 
@@ -179,12 +178,11 @@ int mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
     net->write_packet_to_ether = write_packet_to_ether;
     net->opaque = ctx;
 
-    irq.vmfd = self->m_vm_fd;
-    irq.irqline = VIRTIO_NET_IRQ;
+    bus.vmfd = self->m_vm_fd;
+    bus.irqline = VIRTIO_NET_IRQ;
 
     // Setup virtio bus definition
     bus.mem_map = self->m_mem_map;
-    bus.irq = irq;
 
     // Initialize virtio network device
     self->m_net = virtio_net_init(bus, VIRTIO_NET_MMIO_ADDR, net);
