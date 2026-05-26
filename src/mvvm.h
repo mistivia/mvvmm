@@ -61,6 +61,7 @@ private:
     int m_quit = 0;
     uint8_t m_power_cmd = 0;
 
+    friend void keyboard_thread_func(struct mvvm *vm);
     friend void mvvm_destroy_virtio_blk(struct mvvm *self);
     friend int mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path);
     friend void *keyboard_thread_func(void *arg);

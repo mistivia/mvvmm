@@ -14,7 +14,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <pthread.h>
+#include <thread>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -83,10 +83,9 @@ static int timed_getchar(int fd, int timeout_ms, int *ch)
     }
 }
 
-void *keyboard_thread_func(void *arg)
+void keyboard_thread_func(struct mvvm *vm)
 {
     fprintf(stderr, "Press Ctrl+A & Ctrl+C to exit...\n");
-    struct mvvm *vm = (struct mvvm *)arg;
     set_terminal_raw_mode();
     int ch = 0;
     int escaped = 0;
@@ -117,7 +116,6 @@ void *keyboard_thread_func(void *arg)
             }
         }
     }
-    return NULL;
 }
 
 void sigint_handler(int sig)
@@ -311,17 +309,17 @@ int main(int argc, char **argv)
     if (vm.load_kernel(opts.kernel_path, opts.initrd_path, opts.kernel_cmdline) < 0) {
         return -1;
     }
-    pthread_t keyboard_thread = {0};
-    if (pthread_create(&keyboard_thread, NULL, keyboard_thread_func, &vm) != 0) {
-        perror("Failed to create thread");
-        return 1;
-    }
+    std::thread keyboard_thread([&]() {
+        keyboard_thread_func(&vm);
+    });
     g_vm = &vm;
     signal(SIGINT, sigint_handler);
     signal(SIGTERM, sigterm_handler);
     std::thread vm_th{[&]() { vm.run(); }};
     vm_th.join();
     vm.set_quit(true);
-    pthread_join(keyboard_thread, NULL);
+    if (keyboard_thread.joinable()) {
+        keyboard_thread.join();
+    }
     return 0;
 }
