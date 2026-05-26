@@ -19,10 +19,9 @@
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
-#include <pthread.h>
-#include <string.h>
-#include <stdio.h>
-#include <stdint.h>
+#include <cstring>
+#include <cstdio>
+#include <cstdint>
 
 #include <linux/kvm.h>
 #include <linux/kvm_para.h>
