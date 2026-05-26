@@ -20,13 +20,15 @@
 #include <cstdio>
 
 #include <poll.h>
-#include <pthread.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
+
+#include <thread>
+#include <mutex>
 
 #include "mvvm.h"
 #include "netdev.h"
@@ -39,9 +41,9 @@ struct tap_net_ctx {
     explicit tap_net_ctx() = default;
     int fd = -1;
     char ifname[IFNAMSIZ] = {0};
-    pthread_t rx_thread = {0};
+    std::thread rx_thread{};
     int quit = 0;
-    pthread_mutex_t lock = {0};
+    std::mutex lock{};
 };
 
 static void write_packet_to_ether(ethernet_device *net, const uint8_t *buf, int len)
@@ -91,16 +93,13 @@ static void *tap_net_rx_thread(void *arg)
     }
 
     while (1) {
-
         ssize_t len = timed_read(ctx->fd, buf, sizeof(buf), 300);
         if (len < 0) {
             if (errno == EINTR || errno == ETIMEDOUT) {
-                pthread_mutex_lock(&ctx->lock);
+                std::unique_lock<std::mutex> lk{ctx->lock};
                 if (ctx->quit) {
-                    pthread_mutex_unlock(&ctx->lock);
                     return NULL;
                 }
-                pthread_mutex_unlock(&ctx->lock);
                 continue;
             }
             perror("tap_net_rx_thread: timed_read failed");
@@ -138,7 +137,6 @@ int mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
         return -1;
     }
     ctx->quit = 0;
-    pthread_mutex_init(&ctx->lock, NULL);
     // Open TUN/TAP clone device
     ctx->fd = open("/dev/net/tun", O_RDWR | O_NONBLOCK);
     if (ctx->fd < 0) {
@@ -194,12 +192,14 @@ int mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
         goto fail;
     }
     // Start RX thread to handle incoming packets from TAP
-    pthread_t rx_thread;
-    if (pthread_create(&rx_thread, NULL, tap_net_rx_thread, net) != 0) {
+    try {
+        ctx->rx_thread = std::thread{[net](){
+            tap_net_rx_thread(net);
+        }};
+    } catch (...) {
         fprintf(stderr, "failed to create TAP RX thread\n");
         goto fail;
     }
-    ctx->rx_thread = rx_thread;
     return 0;
 
 fail:
@@ -218,11 +218,13 @@ fail:
 void mvvm_destroy_virtio_net(struct mvvm *self)
 {
     struct tap_net_ctx *ctx = (struct tap_net_ctx *)virtio_net_get_opaque(self->m_net);
-    pthread_mutex_lock(&ctx->lock);
-    ctx->quit = 1;
-    pthread_mutex_unlock(&ctx->lock);
-    void *ret = NULL;
-    pthread_join(ctx->rx_thread, &ret);
+    {
+        std::unique_lock<std::mutex> lk{ctx->lock};
+        ctx->quit = 1;
+    }
+    if (ctx->rx_thread.joinable()) {
+        ctx->rx_thread.join();
+    }
     delete ctx;
     virtio_net_destroy(self->m_net);
     delete self->m_net;

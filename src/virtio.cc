@@ -997,8 +997,8 @@ void *virtio_block_get_opaque(virtio_device *s)
     return bs->bs->opaque;
 }
 
-/*********************************************************************/
-/* network device */
+// ===== network =====
+
 struct __attribute__((packed))
 virtio_net_header {
     uint8_t flags;
@@ -1091,12 +1091,12 @@ virtio_device *virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, ethernet_
         delete s;
         return NULL;
     }
-    /* VIRTIO_NET_F_MAC, VIRTIO_NET_F_STATUS */
-    s->common.device_features = (1 << 5) /* | (1 << 16) */;
+    // VIRTIO_NET_F_MAC
+    s->common.device_features = (1 << 5);
     s->common.queue[0].manual_recv = true;
     s->es = es;
     memcpy(s->common.config_space, es->mac_addr, 6);
-    /* status */
+    // status
     s->common.config_space[6] = 0;
     s->common.config_space[7] = 0;
 
