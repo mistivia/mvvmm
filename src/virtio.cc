@@ -149,7 +149,7 @@ static uint8_t *guest_addr_to_host_addr(virtio_device *s, uint64_t guest_addr)
 }
 
 static int virtio_init(virtio_device *s, virtio_bus_def bus, uint64_t mmio_addr, uint32_t device_id,
-                       int config_space_size, virtio_deviceRecvFunc device_recv, int max_queue_num)
+                       int config_space_size, virtio_devoce_recv_fn device_recv, int max_queue_num)
 {
     s->mem_map = bus.mem_map;
     s->vmfd = bus.vmfd;
@@ -883,7 +883,7 @@ static void virtio_block_req_end(struct blk_io_callback_arg *arg, int ret)
             buf[write_size - 1] = (int)virtio_block_device::result_type::ok;
         }
         memcpy_to_queue(s, queue_idx, desc_idx, 0, buf, write_size);
-        free(buf);
+        delete[] buf;
         virtio_consume_desc(s, queue_idx, desc_idx, write_size);
         break;
     case (uint32_t)virtio_block_device::cmd_type::out:
@@ -908,7 +908,7 @@ static void virtio_block_req_cb(struct blk_io_callback_arg *arg, int ret)
 
     /* handle next requests */
     queue_notify((virtio_device *)s, arg->req.queue_idx);
-    free(arg);
+    delete arg;
     pthread_mutex_unlock(&s->lock);
 }
 
@@ -991,7 +991,7 @@ void virtio_block_destroy(virtio_device *s)
     virtio_block_device *bs = (virtio_block_device *)s;
     virtio_ioeventfd_stop(s);
     s->irq.~irq_signal();
-    free(bs->bs);
+    delete bs->bs;
 }
 
 void *virtio_block_get_opaque(virtio_device *s)
@@ -1116,7 +1116,7 @@ void virtio_net_destroy(virtio_device *s)
     virtio_net_device *es = (virtio_net_device *)s;
     virtio_ioeventfd_stop(s);
     s->irq.~irq_signal();
-    free(es->es);
+    delete es->es;
 }
 
 void *virtio_net_get_opaque(virtio_device *s)

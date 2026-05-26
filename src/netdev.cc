@@ -202,7 +202,7 @@ int mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
 
 fail:
     if (net) {
-        free(net);
+        delete net;
     }
     if (ctx) {
         if (ctx->fd >= 0) {
@@ -221,9 +221,9 @@ void mvvm_destroy_virtio_net(struct mvvm *self)
     pthread_mutex_unlock(&ctx->lock);
     void *ret = NULL;
     pthread_join(ctx->rx_thread, &ret);
-    free(ctx);
+    delete ctx;
     virtio_net_destroy(self->m_net);
-    free(self->m_net);
+    delete self->m_net;
 }
 
 } // namespace mvvmm

@@ -27,6 +27,8 @@
 #include <stdbool.h>
 #include <pthread.h>
 
+#include <functional>
+
 namespace mvvmm {
 
 using virtio_phys_addr_t = uint64_t;
@@ -106,9 +108,6 @@ virtio_device *virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, block_d
 void virtio_block_destroy(virtio_device *s);
 void* virtio_block_get_opaque(virtio_device *s);
 
-/* network device */
-struct ethernet_device; 
-
 struct ethernet_device {
     explicit ethernet_device() = default;
     uint8_t mac_addr[6] = {0}; /* mac address of the interface */
@@ -120,7 +119,6 @@ struct ethernet_device {
     bool (*can_write_packet_to_virtio)(ethernet_device *net) = nullptr;
     void (*write_packet_to_virtio)(ethernet_device *net,
                                 const uint8_t *buf, int len) = nullptr;
-
 };
 
 virtio_device *virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, ethernet_device *es);
@@ -151,13 +149,14 @@ struct VIRTIODesc{
     uint16_t next = 0;
 };
 
-/* return < 0 to stop the notification (it must be manually restarted
-   later), 0 if OK */
-using virtio_deviceRecvFunc = int (*)(virtio_device *s1, int queue_idx, int desc_idx, int read_size,
-                                  int write_size);
-
-/* return NULL if no RAM at this address. The mapping is valid for one page */
-using VIRTIOGetRAMPtrFunc = uint8_t (*)(virtio_device *s, virtio_phys_addr_t paddr);
+// return < 0 to stop the notification (it must be manually restarted
+// later), 0 if OK
+using virtio_devoce_recv_fn =
+    std::function<int(virtio_device *s1,
+                      int queue_idx,
+                      int desc_idx,
+                      int read_size,
+                      int write_size)>;
 
 struct virtio_device {
     explicit virtio_device() = default;
@@ -165,7 +164,6 @@ struct virtio_device {
     /* MMIO only */
     irq_signal irq{};
     int vmfd = -1;
-
     uint32_t int_status = 0;
     uint32_t status = 0;
     uint32_t device_features_sel = 0;
@@ -176,7 +174,7 @@ struct virtio_device {
     uint32_t device_id = 0;
     uint32_t vendor_id = 0;
     uint32_t device_features = 0;
-    virtio_deviceRecvFunc device_recv = nullptr;
+    virtio_devoce_recv_fn device_recv = nullptr;
     uint32_t config_space_size = 0; /* in bytes, must be multiple of 4 */
     uint8_t config_space[VIRTIO_MAX_CONFIG_SPACE_SIZE] = {0};
     pthread_mutex_t lock = {0};
@@ -195,7 +193,6 @@ struct virtio_block_device {
         flush = 4,
         flush_out = 5,
     };
-
     enum class result_type {
         ok = 0,
         io_err = 1,

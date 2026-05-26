@@ -235,7 +235,7 @@ mvvm::~mvvm()
     close(m_kvm_fd);
     mvvm_destroy_virtio_blk(this);
     mvvm_destroy_virtio_net(this);
-    free(m_mem_map);
+    delete m_mem_map;
 }
 
 static int map_file(const char *path, size_t *size, void **out)

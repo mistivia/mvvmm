@@ -220,7 +220,7 @@ void mvvm_destroy_virtio_blk(struct mvvm *self)
     delete ctx->pool;
     delete ctx;
     virtio_block_destroy(self->m_blk);
-    free(self->m_blk);
+    delete self->m_blk;
 }
 
 } // namespace mvvmm
