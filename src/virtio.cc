@@ -24,6 +24,7 @@
  */
 
 #include <cstdint>
+#include <mutex>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -164,7 +165,6 @@ static int virtio_init(virtio_device *s, virtio_bus_def bus, uint64_t mmio_addr,
     s->config_space_size = config_space_size;
     s->device_recv = device_recv;
     s->max_queue_num = max_queue_num;
-    pthread_mutex_init(&s->lock, NULL);
     virtio_reset(s);
 
     /* Initialize irqfd for this device */
@@ -469,9 +469,8 @@ static void virtio_ioeventfd_unregister(virtio_device *s, int queue_idx)
     }
 }
 
-static void *virtio_ioeventfd_poll_thread(void *arg)
+static void virtio_ioeventfd_poll_thread(virtio_device *s)
 {
-    virtio_device *s = (virtio_device *)arg;
     struct pollfd pfds[VIRTIO_MAX_QUEUE];
     int nfds = 0;
     int i;
@@ -511,14 +510,12 @@ static void *virtio_ioeventfd_poll_thread(void *arg)
                         break;
                 }
                 if (qidx < VIRTIO_MAX_QUEUE) {
-                    pthread_mutex_lock(&s->lock);
+                    std::unique_lock<std::mutex> lk{s->lock};
                     queue_notify(s, qidx);
-                    pthread_mutex_unlock(&s->lock);
                 }
             }
         }
     }
-    return NULL;
 }
 
 static int virtio_ioeventfd_start(virtio_device *s)
@@ -534,8 +531,12 @@ static int virtio_ioeventfd_start(virtio_device *s)
         }
     }
     s->ioeventfd_enabled = true;
-    if (pthread_create(&s->ioeventfd_thread, NULL, virtio_ioeventfd_poll_thread, s) != 0) {
-        perror("pthread_create");
+    try {
+        s->ioeventfd_thread = std::thread{[=]() {
+            virtio_ioeventfd_poll_thread(s);
+        }};
+    } catch (...) {
+        perror("ioeventfd_thread create");
         s->ioeventfd_enabled = false;
         for (i = 0; i < VIRTIO_MAX_QUEUE; i++) {
             virtio_ioeventfd_unregister(s, i);
@@ -548,7 +549,9 @@ static int virtio_ioeventfd_start(virtio_device *s)
 static void virtio_ioeventfd_stop(virtio_device *s)
 {
     s->ioeventfd_enabled = false;
-    pthread_join(s->ioeventfd_thread, NULL);
+    if (s->ioeventfd_thread.joinable()) {
+        s->ioeventfd_thread.join();
+    }
     for (int i = 0; i < VIRTIO_MAX_QUEUE; i++) {
         virtio_ioeventfd_unregister(s, i);
     }
@@ -690,10 +693,10 @@ uint32_t virtio_mmio_read(virtio_device *s, uint32_t offset, int size)
 
     uint32_t val = {0};
 
-    pthread_mutex_lock(&s->lock);
+    std::unique_lock<std::mutex> lk{s->lock};
     if (offset >= VIRTIO_MMIO_CONFIG) {
         val = virtio_config_read(s, offset - VIRTIO_MMIO_CONFIG, size);
-        goto end;
+        return val;
     }
 
     if (size == 4) {
@@ -773,9 +776,6 @@ uint32_t virtio_mmio_read(virtio_device *s, uint32_t offset, int size)
         fprintf(stderr, "virtio mmio read error: len != 4\n");
         val = 0;
     }
-
-end:
-    pthread_mutex_unlock(&s->lock);
     return val;
 }
 
@@ -791,10 +791,10 @@ static void set_high32(virtio_phys_addr_t *paddr, uint32_t val)
 
 void virtio_mmio_write(virtio_device *s, uint32_t offset, uint32_t val, int size)
 {
-    pthread_mutex_lock(&s->lock);
+    std::unique_lock<std::mutex> lk{s->lock};
     if (offset >= VIRTIO_MMIO_CONFIG) {
         virtio_config_write(s, offset - VIRTIO_MMIO_CONFIG, val, size);
-        goto end;
+        return;
     }
 
     if (size == 4) {
@@ -852,8 +852,6 @@ void virtio_mmio_write(virtio_device *s, uint32_t offset, uint32_t val, int size
     } else {
         fprintf(stderr, "virtio mmio write error: len != 4\n");
     }
-end:
-    pthread_mutex_unlock(&s->lock);
 }
 
 /*********************************************************************/
@@ -902,14 +900,13 @@ static void virtio_block_req_end(struct blk_io_callback_arg *arg, int ret)
 static void virtio_block_req_cb(struct blk_io_callback_arg *arg, int ret)
 {
     virtio_device *s = arg->s;
-    pthread_mutex_lock(&s->lock);
+    std::unique_lock<std::mutex> lk{s->lock};
 
     virtio_block_req_end(arg, ret);
 
     /* handle next requests */
     queue_notify((virtio_device *)s, arg->req.queue_idx);
     delete arg;
-    pthread_mutex_unlock(&s->lock);
 }
 
 static int virtio_block_recv_request(virtio_device *s, int queue_idx, int desc_idx, int read_size,
@@ -1037,25 +1034,23 @@ static bool virtio_net_can_write_packet(ethernet_device *es)
 {
     bool ret = 0;
     virtio_device *s = (virtio_device *)es->device_opaque;
-    pthread_mutex_lock(&s->lock);
+    std::unique_lock<std::mutex> lk{s->lock};
     queue_state *qs = &s->queue[0];
     uint16_t avail_idx = {0};
 
     if (!qs->ready) {
         ret = false;
-        goto end;
+        return ret;
     }
     avail_idx = virtio_read16(s, qs->avail_addr + 2);
     ret = qs->last_avail_idx != avail_idx;
-end:
-    pthread_mutex_unlock(&s->lock);
     return ret;
 }
 
 static void virtio_net_write_packet(ethernet_device *es, const uint8_t *buf, int buf_len)
 {
     virtio_device *s = (virtio_device *)es->device_opaque;
-    pthread_mutex_lock(&s->lock);
+    std::unique_lock<std::mutex> lk{s->lock};
 
     virtio_net_device *s1 = (virtio_net_device *)s;
     int queue_idx = 0;
@@ -1065,24 +1060,26 @@ static void virtio_net_write_packet(ethernet_device *es, const uint8_t *buf, int
     int len = {0}, read_size = {0}, write_size = {0};
     uint16_t avail_idx = {0};
 
-    if (!qs->ready)
-        goto end;
+    if (!qs->ready) {
+        return;
+    }
     avail_idx = virtio_read16(s, qs->avail_addr + 2);
-    if (qs->last_avail_idx == avail_idx)
-        goto end;
+    if (qs->last_avail_idx == avail_idx) {
+        return;
+    }
     desc_idx = virtio_read16(s, qs->avail_addr + 4 + (qs->last_avail_idx & (qs->num - 1)) * 2);
-    if (get_desc_rw_size(s, &read_size, &write_size, queue_idx, desc_idx))
-        goto end;
+    if (get_desc_rw_size(s, &read_size, &write_size, queue_idx, desc_idx)) {
+        return;
+    }
     len = s1->header_size + buf_len;
-    if (len > write_size)
-        goto end;
+    if (len > write_size) {
+        return;
+    }
     memset(&h, 0, s1->header_size);
     memcpy_to_queue(s, queue_idx, desc_idx, 0, &h, s1->header_size);
     memcpy_to_queue(s, queue_idx, desc_idx, s1->header_size, buf, buf_len);
     virtio_consume_desc(s, queue_idx, desc_idx, len);
     qs->last_avail_idx++;
-end:
-    pthread_mutex_unlock(&s->lock);
 }
 
 virtio_device *virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, ethernet_device *es)

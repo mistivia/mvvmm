@@ -23,10 +23,11 @@
  * THE SOFTWARE.
  */
 #pragma once
-#include <stdint.h>
-#include <stdbool.h>
-#include <pthread.h>
 
+#include <cstdint>
+
+#include <thread>
+#include <mutex>
 #include <functional>
 
 namespace mvvmm {
@@ -175,11 +176,11 @@ struct virtio_device {
     virtio_devoce_recv_fn device_recv = nullptr;
     uint32_t config_space_size = 0; /* in bytes, must be multiple of 4 */
     uint8_t config_space[VIRTIO_MAX_CONFIG_SPACE_SIZE] = {0};
-    pthread_mutex_t lock = {0};
+    std::mutex lock{};
     int max_queue_num = 0;
     uint64_t mmio_addr = 0;         /* MMIO base address */
     int ioeventfd[VIRTIO_MAX_QUEUE] = {0};   /* eventfd for each queue notify */
-    pthread_t ioeventfd_thread = 0; /* thread polling ioeventfds */
+    std::thread ioeventfd_thread{}; /* thread polling ioeventfds */
     bool ioeventfd_enabled = 0;     /* whether ioeventfd is active */
 };
 

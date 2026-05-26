@@ -14,11 +14,13 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
+
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
+
 #include <poll.h>
 #include <pthread.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
