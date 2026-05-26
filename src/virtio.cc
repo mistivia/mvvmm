@@ -129,7 +129,7 @@ static void virtio_reset(virtio_device *s)
     s->device_features_sel = 0;
     s->int_status = 0;
     for (i = 0; i < VIRTIO_MAX_QUEUE; i++) {
-        QueueState *qs = &s->queue[i];
+        queue_state *qs = &s->queue[i];
         qs->avail_addr = 0;
         qs->desc_addr = 0;
         qs->used_addr = 0;
@@ -259,17 +259,17 @@ static int virtio_memcpy_to_guest(virtio_device *s, virtio_phys_addr_t addr, con
     return 0;
 }
 
-static int get_desc(virtio_device *s, VIRTIODesc *desc, int queue_idx, int desc_idx)
+static int get_desc(virtio_device *s, virtio_desc *desc, int queue_idx, int desc_idx)
 {
-    QueueState *qs = &s->queue[queue_idx];
+    queue_state *qs = &s->queue[queue_idx];
     return virtio_memcpy_from_guest(
-        s, (uint8_t *)desc, qs->desc_addr + desc_idx * sizeof(VIRTIODesc), sizeof(VIRTIODesc));
+        s, (uint8_t *)desc, qs->desc_addr + desc_idx * sizeof(virtio_desc), sizeof(virtio_desc));
 }
 
 static int memcpy_to_from_queue(virtio_device *s, uint8_t *buf, int queue_idx, int desc_idx,
                                 int offset, int count, bool to_queue)
 {
-    VIRTIODesc desc{};
+    virtio_desc desc{};
     int l, f_write_flag = {0};
 
     if (count == 0)
@@ -557,7 +557,7 @@ static void virtio_ioeventfd_stop(virtio_device *s)
 /* signal that the descriptor has been consumed */
 static void virtio_consume_desc(virtio_device *s, int queue_idx, int desc_idx, int desc_len)
 {
-    QueueState *qs = &s->queue[queue_idx];
+    queue_state *qs = &s->queue[queue_idx];
     virtio_phys_addr_t index_addr = 0, ring_addr = {0};
     uint32_t index = {0};
 
@@ -579,7 +579,7 @@ static void virtio_consume_desc(virtio_device *s, int queue_idx, int desc_idx, i
 static int get_desc_rw_size(virtio_device *s, int *pread_size, int *pwrite_size, int queue_idx,
                             int desc_idx)
 {
-    VIRTIODesc desc{};
+    virtio_desc desc{};
     int read_size, write_size = {0};
 
     read_size = 0;
@@ -615,7 +615,7 @@ done:
 /* XXX: test if the queue is ready ? */
 static void queue_notify(virtio_device *s, int queue_idx)
 {
-    QueueState *qs = &s->queue[queue_idx];
+    queue_state *qs = &s->queue[queue_idx];
     uint16_t avail_idx = {0};
     int desc_idx = {0}, read_size = {0}, write_size = {0};
 
@@ -1038,7 +1038,7 @@ static bool virtio_net_can_write_packet(ethernet_device *es)
     bool ret = 0;
     virtio_device *s = (virtio_device *)es->device_opaque;
     pthread_mutex_lock(&s->lock);
-    QueueState *qs = &s->queue[0];
+    queue_state *qs = &s->queue[0];
     uint16_t avail_idx = {0};
 
     if (!qs->ready) {
@@ -1059,7 +1059,7 @@ static void virtio_net_write_packet(ethernet_device *es, const uint8_t *buf, int
 
     virtio_net_device *s1 = (virtio_net_device *)s;
     int queue_idx = 0;
-    QueueState *qs = &s->queue[queue_idx];
+    queue_state *qs = &s->queue[queue_idx];
     int desc_idx = {0};
     virtio_net_header h = {0};
     int len = {0}, read_size = {0}, write_size = {0};

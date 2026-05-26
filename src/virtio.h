@@ -74,8 +74,6 @@ struct disk_image {
     uint64_t size = 0;
 };
 
-struct block_device;
-
 struct block_request {
     explicit block_request() = default;
     uint32_t type = 0;
@@ -129,8 +127,8 @@ void* virtio_net_get_opaque(virtio_device *s);
 constexpr static int VIRTIO_MAX_QUEUE = 2;
 constexpr static int VIRTIO_MAX_CONFIG_SPACE_SIZE = 256;
 
-struct QueueState {
-    explicit QueueState() = default;
+struct queue_state {
+    explicit queue_state() = default;
     uint32_t ready = 0; /* 0 or 1 */
     uint32_t num = 0;
     uint16_t last_avail_idx = 0;
@@ -141,8 +139,8 @@ struct QueueState {
 };
 
 
-struct VIRTIODesc{
-    explicit VIRTIODesc() = default;
+struct virtio_desc{
+    explicit virtio_desc() = default;
     uint64_t addr = 0;
     uint32_t len = 0;
     uint16_t flags = 0; /* VRING_DESC_F_x */
@@ -168,7 +166,7 @@ struct virtio_device {
     uint32_t status = 0;
     uint32_t device_features_sel = 0;
     uint32_t queue_sel = 0; /* currently selected queue */
-    QueueState queue[VIRTIO_MAX_QUEUE];
+    queue_state queue[VIRTIO_MAX_QUEUE];
 
     /* device specific */
     uint32_t device_id = 0;
