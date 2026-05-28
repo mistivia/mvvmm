@@ -46,9 +46,8 @@ struct async_io_req {
 };
 
 // Worker function executed by thread pool for disk I/O operations
-static void *block_io_worker_fn(void *arg)
+static void block_io_worker_fn(std::unique_ptr<async_io_req> req)
 {
-    async_io_req *req = (async_io_req *)arg;
     ssize_t n = 0;
     int ret = 0;
 
@@ -73,9 +72,6 @@ static void *block_io_worker_fn(void *arg)
     if (req->cb) {
         req->cb((blk_io_callback_arg *)req->opaque, ret);
     }
-
-    delete req;
-    return NULL;
 }
 
 // Get total sector count (synchronous operation)
@@ -88,7 +84,7 @@ static int64_t block_get_sector_count(block_device *bs)
 static int block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf, int n,
                             block_device_comp_func cb, blk_io_callback_arg *opaque)
 {
-    async_io_req *req = new async_io_req{};
+    auto req = std::make_unique<async_io_req>();
 
     if (!req) {
         return -1;
@@ -102,8 +98,10 @@ static int block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf,
     req->opaque = opaque;
     req->is_write = 0;
 
-    if (bs->ctx->pool->run([req]() { block_io_worker_fn(req); }) < 0) {
-        delete req;
+    int runret = bs->ctx->pool->run([rawreq = req.release()]() { 
+        block_io_worker_fn(std::unique_ptr<async_io_req>{rawreq});
+    });
+    if (runret < 0) {
         return -1;
     }
 
@@ -114,7 +112,7 @@ static int block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf,
 static int block_write_async(block_device *bs, uint64_t sector_num, const uint8_t *buf, int n,
                              block_device_comp_func cb, blk_io_callback_arg *opaque)
 {
-    async_io_req *req = new async_io_req{};
+    auto req = std::make_unique<async_io_req>();
 
     req->fd = bs->ctx->fd;
     req->offset = sector_num * SECTOR_SIZE;
@@ -125,8 +123,7 @@ static int block_write_async(block_device *bs, uint64_t sector_num, const uint8_
     req->opaque = opaque;
     req->is_write = 1;
 
-    if (bs->ctx->pool->run([req]() { block_io_worker_fn(req); }) < 0) {
-        delete req;
+    if (bs->ctx->pool->run([rawreq = req.release()]() { block_io_worker_fn(std::unique_ptr<async_io_req>(rawreq)); }) < 0) {
         return -1;
     }
 
