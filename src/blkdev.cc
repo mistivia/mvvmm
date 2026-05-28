@@ -14,6 +14,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <memory>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -23,7 +24,6 @@
 #include <fcntl.h>
 
 #include "virtio.h"
-#include "threadpool.h"
 #include "mvvm.h"
 #include "config.h"
 
@@ -32,14 +32,6 @@ namespace mvvmm {
 #define SECTOR_SIZE 512
 
 class thread_pool;
-// Context for block device operations using thread pool
-
-struct block_device_ctx {
-    explicit block_device_ctx() = default;
-    int fd = -1;
-    uint64_t size = 0;
-    thread_pool *pool = nullptr;
-};
 
 // Request structure passed to worker threads for async I/O
 struct async_io_req {
@@ -89,22 +81,20 @@ static void *block_io_worker_fn(void *arg)
 // Get total sector count (synchronous operation)
 static int64_t block_get_sector_count(block_device *bs)
 {
-    struct block_device_ctx *ctx = (struct block_device_ctx *)bs->opaque;
-    return ctx->size / SECTOR_SIZE;
+    return bs->ctx->size / SECTOR_SIZE;
 }
 
 // Asynchronous read operation using thread pool
 static int block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf, int n,
                             block_device_comp_func cb, struct blk_io_callback_arg *opaque)
 {
-    struct block_device_ctx *ctx = (struct block_device_ctx *)bs->opaque;
     async_io_req *req = new async_io_req{};
 
     if (!req) {
         return -1;
     }
 
-    req->fd = ctx->fd;
+    req->fd = bs->ctx->fd;
     req->offset = sector_num * SECTOR_SIZE;
     req->buf = buf;
     req->count = n * SECTOR_SIZE;
@@ -112,7 +102,7 @@ static int block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf,
     req->opaque = opaque;
     req->is_write = 0;
 
-    if (ctx->pool->run([req]() { block_io_worker_fn(req); }) < 0) {
+    if (bs->ctx->pool->run([req]() { block_io_worker_fn(req); }) < 0) {
         delete req;
         return -1;
     }
@@ -124,10 +114,9 @@ static int block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf,
 static int block_write_async(block_device *bs, uint64_t sector_num, const uint8_t *buf, int n,
                              block_device_comp_func cb, struct blk_io_callback_arg *opaque)
 {
-    struct block_device_ctx *ctx = (struct block_device_ctx *)bs->opaque;
     async_io_req *req = new async_io_req{};
 
-    req->fd = ctx->fd;
+    req->fd = bs->ctx->fd;
     req->offset = sector_num * SECTOR_SIZE;
     // Cast away const for pread/pwrite API compatibility
     req->buf = (uint8_t *)buf;
@@ -136,7 +125,7 @@ static int block_write_async(block_device *bs, uint64_t sector_num, const uint8_
     req->opaque = opaque;
     req->is_write = 1;
 
-    if (ctx->pool->run([req]() { block_io_worker_fn(req); }) < 0) {
+    if (bs->ctx->pool->run([req]() { block_io_worker_fn(req); }) < 0) {
         delete req;
         return -1;
     }
@@ -147,13 +136,12 @@ static int block_write_async(block_device *bs, uint64_t sector_num, const uint8_
 // Initialize virtio block device with thread pool backend
 int mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
 {
-    struct block_device_ctx *ctx = NULL;
     block_device *bs = NULL;
     struct stat st = {0};
     virtio_bus_def bus{};
     int ret = -1;
     // Allocate block device context
-    ctx = new block_device_ctx{};
+    auto ctx = std::make_unique<block_device_ctx>();
     if (!ctx) {
         fprintf(stderr, "failed to allocate block device context\n");
         return -1;
@@ -171,7 +159,7 @@ int mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     }
     ctx->size = st.st_size;
     // Create thread pool for async I/O operations
-    ctx->pool = thread_pool::make_instance(VIRTIO_BLK_MAX_QUEUE_NUM);
+    ctx->pool = std::unique_ptr<thread_pool>(thread_pool::make_instance(VIRTIO_BLK_MAX_QUEUE_NUM));
     if (!ctx->pool) {
         fprintf(stderr, "failed to create thread pool\n");
         goto fail;
@@ -186,7 +174,7 @@ int mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
     bs->get_sector_count = block_get_sector_count;
     bs->read_async = block_read_async;
     bs->write_async = block_write_async;
-    bs->opaque = ctx;
+    bs->ctx = std::move(ctx);
 
     bus.vmfd = self->m_vm_fd;
     bus.irqline = VIRTIO_BLK_IRQ;
@@ -205,20 +193,11 @@ fail:
     if (bs) {
         delete bs;
     }
-    if (ctx) {
-        if (ctx->fd >= 0) {
-            close(ctx->fd);
-        }
-        delete ctx;
-    }
     return ret;
 }
 
 void mvvm_destroy_virtio_blk(struct mvvm *self)
 {
-    struct block_device_ctx *ctx = (struct block_device_ctx *)virtio_block_get_opaque(self->m_blk);
-    delete ctx->pool;
-    delete ctx;
     virtio_block_destroy(self->m_blk);
     delete self->m_blk;
 }

@@ -121,6 +121,12 @@ static uint16_t get_le16(void *ptr)
     return ((uint16_t)p[0]) | ((uint16_t)p[1] << 8);
 }
 
+block_device_ctx::~block_device_ctx() {
+    if (this->fd >= 0) {
+        close(this->fd);
+    }
+}
+
 static void virtio_reset(virtio_device *s)
 {
     int i = 0;
@@ -989,12 +995,6 @@ void virtio_block_destroy(virtio_device *s)
     virtio_ioeventfd_stop(s);
     s->irq.~irq_signal();
     delete bs->bs;
-}
-
-void *virtio_block_get_opaque(virtio_device *s)
-{
-    virtio_block_device *bs = (virtio_block_device *)s;
-    return bs->bs->opaque;
 }
 
 // ===== network =====

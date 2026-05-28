@@ -24,8 +24,10 @@
  */
 #pragma once
 
+#include "threadpool.h"
 #include <cstdint>
 
+#include <memory>
 #include <thread>
 #include <mutex>
 #include <functional>
@@ -90,6 +92,14 @@ struct blk_io_callback_arg {
     block_request req{};
 };
 
+struct block_device_ctx {
+    explicit block_device_ctx() = default;
+    ~block_device_ctx();
+    int fd = -1;
+    uint64_t size = 0;
+    std::unique_ptr<thread_pool> pool;
+};
+
 struct block_device {
     explicit block_device() = default;
     int64_t (*get_sector_count)(block_device *bs) = nullptr;
@@ -99,13 +109,12 @@ struct block_device {
     int (*write_async)(block_device *bs,
                        uint64_t sector_num, const uint8_t *buf, int n, // n is sector nubmer
                        block_device_comp_func cb, struct blk_io_callback_arg *cbarg) = nullptr;
-    void *opaque = nullptr;
+    std::unique_ptr<block_device_ctx> ctx;
 };
 
 virtio_device *virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, block_device *bs);
 
 void virtio_block_destroy(virtio_device *s);
-void* virtio_block_get_opaque(virtio_device *s);
 
 struct ethernet_device {
     explicit ethernet_device() = default;
