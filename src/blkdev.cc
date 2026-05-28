@@ -38,10 +38,9 @@ struct async_io_req {
     explicit async_io_req() = default;
     int fd = -1;
     uint64_t offset = 0;
-    uint8_t *buf = nullptr;
     size_t count = 0;
     block_device_comp_func cb = nullptr;
-    void *opaque = nullptr;
+    std::unique_ptr<blk_io_callback_arg> arg;
     int is_write = 0;
 };
 
@@ -53,10 +52,9 @@ static void block_io_worker_fn(std::unique_ptr<async_io_req> req)
 
     // Perform actual I/O using pread/pwrite for thread safety
     if (req->is_write) {
-        n = pwrite(req->fd, req->buf, req->count, req->offset);
-        delete[] req->buf;
+        n = pwrite(req->fd, req->arg->req.buf.get(), req->count, req->offset);
     } else {
-        n = pread(req->fd, req->buf, req->count, req->offset);
+        n = pread(req->fd, req->arg->req.buf.get(), req->count, req->offset);
     }
 
     // Determine return code based on operation result
@@ -70,7 +68,7 @@ static void block_io_worker_fn(std::unique_ptr<async_io_req> req)
 
     // Invoke completion callback if provided
     if (req->cb) {
-        req->cb((blk_io_callback_arg *)req->opaque, ret);
+        req->cb(std::move(req->arg), ret);
     }
 }
 
@@ -81,53 +79,53 @@ static int64_t block_get_sector_count(block_device *bs)
 }
 
 // Asynchronous read operation using thread pool
-static int block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf, int n,
-                            block_device_comp_func cb, blk_io_callback_arg *opaque)
+static void block_read_async(block_device *bs, uint64_t sector_num, int n,
+                            block_device_comp_func cb, std::unique_ptr<blk_io_callback_arg> arg)
 {
     auto req = std::make_unique<async_io_req>();
 
-    if (!req) {
-        return -1;
-    }
-
     req->fd = bs->ctx->fd;
     req->offset = sector_num * SECTOR_SIZE;
-    req->buf = buf;
     req->count = n * SECTOR_SIZE;
     req->cb = cb;
-    req->opaque = opaque;
+    req->arg = std::move(arg);
     req->is_write = 0;
-
-    int runret = bs->ctx->pool->run([rawreq = req.release()]() { 
+    auto rawreq = req.release();
+    int runret = bs->ctx->pool->run([rawreq]() { 
         block_io_worker_fn(std::unique_ptr<async_io_req>{rawreq});
     });
     if (runret < 0) {
-        return -1;
+        // unsafe
+        req = std::unique_ptr<async_io_req>(rawreq);
+        virtio_block_req_end(std::move(req->arg), -1);
+        return;
     }
 
-    return 0;
+    return;
 }
 
 // Asynchronous write operation using thread pool
-static int block_write_async(block_device *bs, uint64_t sector_num, const uint8_t *buf, int n,
-                             block_device_comp_func cb, blk_io_callback_arg *opaque)
+static void block_write_async(block_device *bs, uint64_t sector_num, int n,
+                              block_device_comp_func cb, std::unique_ptr<blk_io_callback_arg> arg)
 {
     auto req = std::make_unique<async_io_req>();
 
     req->fd = bs->ctx->fd;
     req->offset = sector_num * SECTOR_SIZE;
     // Cast away const for pread/pwrite API compatibility
-    req->buf = (uint8_t *)buf;
     req->count = n * SECTOR_SIZE;
     req->cb = cb;
-    req->opaque = opaque;
+    req->arg = std::move(arg);
     req->is_write = 1;
-
-    if (bs->ctx->pool->run([rawreq = req.release()]() { block_io_worker_fn(std::unique_ptr<async_io_req>(rawreq)); }) < 0) {
-        return -1;
+    auto rawreq = req.release();
+    if (bs->ctx->pool->run([rawreq]() { block_io_worker_fn(std::unique_ptr<async_io_req>(rawreq)); }) < 0) {
+        // unsafe
+        req = std::unique_ptr<async_io_req>(rawreq);
+        virtio_block_req_end(std::move(req->arg), -1);
+        return;
     }
 
-    return 0;
+    return;
 }
 
 // Initialize virtio block device with thread pool backend

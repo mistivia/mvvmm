@@ -24,6 +24,7 @@
  */
 
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <stdlib.h>
 #include <stdio.h>
@@ -869,25 +870,25 @@ struct block_request_header {
     uint64_t sector_num;
 };
 
-static void virtio_block_req_end(struct blk_io_callback_arg *arg, int ret)
+void virtio_block_req_end(std::unique_ptr<blk_io_callback_arg> arg, int ret)
 {
     virtio_device *s = arg->s;
     int write_size = {0};
     int queue_idx = arg->req.queue_idx;
     int desc_idx = arg->req.desc_idx;
-    uint8_t *buf = {0}, buf1[1] = {0};
+    uint8_t *rawbuf;
+    uint8_t buf1[1] = {0};
 
     switch (arg->req.type) {
     case (uint32_t)virtio_block_device::cmd_type::in:
         write_size = arg->req.write_size;
-        buf = arg->req.buf;
+        rawbuf = arg->req.buf.get();
         if (ret < 0) {
-            buf[write_size - 1] = (int)virtio_block_device::result_type::io_err;
+            rawbuf[write_size - 1] = (int)virtio_block_device::result_type::io_err;
         } else {
-            buf[write_size - 1] = (int)virtio_block_device::result_type::ok;
+            rawbuf[write_size - 1] = (int)virtio_block_device::result_type::ok;
         }
-        memcpy_to_queue(s, queue_idx, desc_idx, 0, buf, write_size);
-        delete[] buf;
+        memcpy_to_queue(s, queue_idx, desc_idx, 0, rawbuf, write_size);
         virtio_consume_desc(s, queue_idx, desc_idx, write_size);
         break;
     case (uint32_t)virtio_block_device::cmd_type::out:
@@ -903,16 +904,15 @@ static void virtio_block_req_end(struct blk_io_callback_arg *arg, int ret)
     }
 }
 
-static void virtio_block_req_cb(struct blk_io_callback_arg *arg, int ret)
+static void virtio_block_req_cb(std::unique_ptr<blk_io_callback_arg> arg, int ret)
 {
     virtio_device *s = arg->s;
     std::unique_lock<std::mutex> lk{s->lock};
-
-    virtio_block_req_end(arg, ret);
-
+    int queue_idx = arg->req.queue_idx;
+    virtio_block_req_end(std::move(arg), ret);
+    
     /* handle next requests */
-    queue_notify((virtio_device *)s, arg->req.queue_idx);
-    delete arg;
+    queue_notify((virtio_device *)s, queue_idx);
 }
 
 static int virtio_block_recv_request(virtio_device *s, int queue_idx, int desc_idx, int read_size,
@@ -921,27 +921,22 @@ static int virtio_block_recv_request(virtio_device *s, int queue_idx, int desc_i
     virtio_block_device *s1 = (virtio_block_device *)s;
     block_device *bs = s1->bs;
     block_request_header h = {0};
-    uint8_t *buf = {0};
-    int len, ret = {0};
+    int len;
 
     if (memcpy_from_queue(s, &h, queue_idx, desc_idx, 0, sizeof(h)) < 0)
         return 0;
-    auto iocb_arg = new blk_io_callback_arg{};
+    auto iocb_arg = std::make_unique<blk_io_callback_arg>();
     iocb_arg->s = s;
     iocb_arg->req.type = h.type;
     iocb_arg->req.queue_idx = queue_idx;
     iocb_arg->req.desc_idx = desc_idx;
     switch (h.type) {
     case (uint32_t)virtio_block_device::cmd_type::in:
-        iocb_arg->req.buf = new uint8_t[write_size];
-        memset(iocb_arg->req.buf, 0, write_size);
+        iocb_arg->req.buf = std::make_unique<uint8_t[]>(write_size);
+        memset(iocb_arg->req.buf.get(), 0, write_size);
         iocb_arg->req.write_size = write_size;
-        ret = bs->read_async(bs, h.sector_num, iocb_arg->req.buf, (write_size - 1) / SECTOR_SIZE,
-                             virtio_block_req_cb, iocb_arg);
-        if (ret < 0) {
-            virtio_block_req_end(iocb_arg, ret);
-            delete iocb_arg;
-        }
+        bs->read_async(bs, h.sector_num, (write_size - 1) / SECTOR_SIZE,
+                             virtio_block_req_cb, std::move(iocb_arg));
         break;
     case (uint32_t)virtio_block_device::cmd_type::out:
         if (write_size < 1) {
@@ -953,16 +948,11 @@ static int virtio_block_recv_request(virtio_device *s, int queue_idx, int desc_i
             fprintf(stderr, "virtio_block_recv_request invalid read_size.\n");
             abort();
         }
-        buf = new uint8_t[len];
-        memset(buf, 0, len);
-        memcpy_from_queue(s, buf, queue_idx, desc_idx, sizeof(h), len);
-        ret = bs->write_async(bs, h.sector_num, buf, len / SECTOR_SIZE, virtio_block_req_cb,
-                              iocb_arg);
-        if (ret < 0) {
-            delete[] buf;
-            virtio_block_req_end(iocb_arg, ret);
-            delete iocb_arg;
-        }
+        iocb_arg->req.buf = std::make_unique<uint8_t[]>(len);
+        memset(iocb_arg->req.buf.get(), 0, len);
+        memcpy_from_queue(s, iocb_arg->req.buf.get(), queue_idx, desc_idx, sizeof(h), len);
+        bs->write_async(bs, h.sector_num, len / SECTOR_SIZE, virtio_block_req_cb,
+                              std::move(iocb_arg));
         break;
     default:
         break;

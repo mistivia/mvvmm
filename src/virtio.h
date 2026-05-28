@@ -69,7 +69,7 @@ void virtio_mmio_write(virtio_device *s, uint32_t offset,
 
 /* block device */
 struct blk_io_callback_arg;
-using block_device_comp_func = void (*)(struct blk_io_callback_arg *callback_arg, int ret);
+using block_device_comp_func = void (*)(std::unique_ptr<blk_io_callback_arg> callback_arg, int ret);
 
 struct disk_image {
     explicit disk_image() = default;
@@ -80,7 +80,7 @@ struct disk_image {
 struct block_request {
     explicit block_request() = default;
     uint32_t type = 0;
-    uint8_t *buf = nullptr;
+    std::unique_ptr<uint8_t[]> buf;
     int write_size = 0;
     int queue_idx = 0;
     int desc_idx = 0;
@@ -103,19 +103,19 @@ struct block_device_ctx {
 struct block_device {
     explicit block_device() = default;
     int64_t (*get_sector_count)(block_device *bs) = nullptr;
-    int (*read_async)(block_device *bs,
-                      uint64_t sector_num, uint8_t *buf, int n, // n is sector number
-                      block_device_comp_func cb, struct blk_io_callback_arg *cbarg) = nullptr;
-    int (*write_async)(block_device *bs,
-                       uint64_t sector_num, const uint8_t *buf, int n, // n is sector nubmer
-                       block_device_comp_func cb, struct blk_io_callback_arg *cbarg) = nullptr;
+    void (*read_async)(block_device *bs,
+                      uint64_t sector_num, int n, // n is sector number
+                      block_device_comp_func cb, std::unique_ptr<blk_io_callback_arg> cbarg) = nullptr;
+    void (*write_async)(block_device *bs,
+                       uint64_t sector_num, int n, // n is sector nubmer
+                       block_device_comp_func cb, std::unique_ptr<blk_io_callback_arg> cbarg) = nullptr;
     std::unique_ptr<block_device_ctx> ctx;
 };
 
 virtio_device *virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, block_device *bs);
 
 void virtio_block_destroy(virtio_device *s);
-
+void virtio_block_req_end(std::unique_ptr<blk_io_callback_arg> arg, int ret);
 struct ethernet_device {
     explicit ethernet_device() = default;
     uint8_t mac_addr[6] = {0}; /* mac address of the interface */
