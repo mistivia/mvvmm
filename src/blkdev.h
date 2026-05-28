@@ -17,9 +17,11 @@
 #pragma once
 namespace mvvmm {
 
-int
-mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path);
+struct mvvm;
 
-void mvvm_destroy_virtio_blk(struct mvvm *self);
+int
+mvvm_init_virtio_blk(mvvm *self, const char *disk_path);
+
+void mvvm_destroy_virtio_blk(mvvm *self);
 
 } // namespace mvvmm

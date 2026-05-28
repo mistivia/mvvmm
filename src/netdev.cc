@@ -48,7 +48,7 @@ struct tap_net_ctx {
 
 static void write_packet_to_ether(ethernet_device *net, const uint8_t *buf, int len)
 {
-    struct tap_net_ctx *ctx = (struct tap_net_ctx *)net->opaque;
+    tap_net_ctx *ctx = (tap_net_ctx *)net->opaque;
     if (!ctx || ctx->fd < 0 || !buf || len <= 0) {
         return;
     }
@@ -57,7 +57,7 @@ static void write_packet_to_ether(ethernet_device *net, const uint8_t *buf, int 
 
 static ssize_t timed_read(int fd, void *buf, size_t len, int timeout_ms)
 {
-    struct pollfd pfd = {0};
+    pollfd pfd = {0};
     int ret = 0;
 
     pfd.fd = fd;
@@ -85,7 +85,7 @@ static ssize_t timed_read(int fd, void *buf, size_t len, int timeout_ms)
 static void *tap_net_rx_thread(void *arg)
 {
     ethernet_device *net = (ethernet_device *)arg;
-    struct tap_net_ctx *ctx = (struct tap_net_ctx *)net->opaque;
+    tap_net_ctx *ctx = (tap_net_ctx *)net->opaque;
     uint8_t buf[TAP_BUF_SIZE] = {0};
 
     if (!ctx || ctx->fd < 0) {
@@ -122,12 +122,12 @@ static void *tap_net_rx_thread(void *arg)
 }
 
 // Initialize virtio network device with TAP backend
-int mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
+int mvvm_init_virtio_net(mvvm *self, const char *tap_ifname)
 {
-    struct tap_net_ctx *ctx = NULL;
+    tap_net_ctx *ctx = NULL;
     ethernet_device *net = NULL;
     virtio_bus_def bus;
-    struct ifreq ifr = {0};
+    ifreq ifr = {0};
     int ret = -1;
 
     // Allocate TAP device context
@@ -215,9 +215,9 @@ fail:
     return ret;
 }
 
-void mvvm_destroy_virtio_net(struct mvvm *self)
+void mvvm_destroy_virtio_net(mvvm *self)
 {
-    struct tap_net_ctx *ctx = (struct tap_net_ctx *)virtio_net_get_opaque(self->m_net);
+    tap_net_ctx *ctx = (tap_net_ctx *)virtio_net_get_opaque(self->m_net);
     {
         std::unique_lock<std::mutex> lk{ctx->lock};
         ctx->quit = 1;

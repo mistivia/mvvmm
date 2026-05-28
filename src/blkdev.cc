@@ -48,7 +48,7 @@ struct async_io_req {
 // Worker function executed by thread pool for disk I/O operations
 static void *block_io_worker_fn(void *arg)
 {
-    struct async_io_req *req = (struct async_io_req *)arg;
+    async_io_req *req = (async_io_req *)arg;
     ssize_t n = 0;
     int ret = 0;
 
@@ -71,7 +71,7 @@ static void *block_io_worker_fn(void *arg)
 
     // Invoke completion callback if provided
     if (req->cb) {
-        req->cb((struct blk_io_callback_arg *)req->opaque, ret);
+        req->cb((blk_io_callback_arg *)req->opaque, ret);
     }
 
     delete req;
@@ -86,7 +86,7 @@ static int64_t block_get_sector_count(block_device *bs)
 
 // Asynchronous read operation using thread pool
 static int block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf, int n,
-                            block_device_comp_func cb, struct blk_io_callback_arg *opaque)
+                            block_device_comp_func cb, blk_io_callback_arg *opaque)
 {
     async_io_req *req = new async_io_req{};
 
@@ -112,7 +112,7 @@ static int block_read_async(block_device *bs, uint64_t sector_num, uint8_t *buf,
 
 // Asynchronous write operation using thread pool
 static int block_write_async(block_device *bs, uint64_t sector_num, const uint8_t *buf, int n,
-                             block_device_comp_func cb, struct blk_io_callback_arg *opaque)
+                             block_device_comp_func cb, blk_io_callback_arg *opaque)
 {
     async_io_req *req = new async_io_req{};
 
@@ -134,7 +134,7 @@ static int block_write_async(block_device *bs, uint64_t sector_num, const uint8_
 }
 
 // Initialize virtio block device with thread pool backend
-int mvvm_init_virtio_blk(struct mvvm *self, const char *disk_path)
+int mvvm_init_virtio_blk(mvvm *self, const char *disk_path)
 {
     block_device *bs = NULL;
     struct stat st = {0};
@@ -196,7 +196,7 @@ fail:
     return ret;
 }
 
-void mvvm_destroy_virtio_blk(struct mvvm *self)
+void mvvm_destroy_virtio_blk(mvvm *self)
 {
     virtio_block_destroy(self->m_blk);
     delete self->m_blk;

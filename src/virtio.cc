@@ -373,7 +373,7 @@ static int memcpy_to_queue(virtio_device *s, int queue_idx, int desc_idx, int of
 
 void irq_signal::set_irq(int level)
 {
-    struct kvm_irq_level irq = {0};
+    kvm_irq_level irq = {0};
     irq.irq = m_irqline;
     irq.level = level;
     ioctl(m_vmfd, KVM_IRQ_LINE, &irq);
@@ -390,7 +390,7 @@ void irq_signal::trigger()
 int irq_signal::init(int vmfd, int irqline)
 {
     int fd;
-    struct kvm_irqfd irqfd = {0};
+    kvm_irqfd irqfd = {0};
     m_vmfd = vmfd;
     m_irqline = irqline;
     fd = eventfd(0, EFD_NONBLOCK);

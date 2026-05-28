@@ -31,16 +31,16 @@
 
 namespace mvvmm {
 
-struct mvvm *g_vm = NULL;
+mvvm *g_vm = NULL;
 
-struct termios orig_termios;
+termios orig_termios;
 int g_term_changed = 0;
 
 void reset_terminal_mode() { tcsetattr(0, TCSAFLUSH, &orig_termios); }
 
 void set_terminal_raw_mode()
 {
-    struct termios raw = {0};
+    termios raw = {0};
     if (!isatty(0)) {
         fprintf(stderr, "Not a terminal.\n");
         return;
@@ -58,7 +58,7 @@ void set_terminal_raw_mode()
 
 static int timed_getchar(int fd, int timeout_ms, int *ch)
 {
-    struct pollfd pfd;
+    pollfd pfd;
     int ret;
     unsigned char c;
 
@@ -83,7 +83,7 @@ static int timed_getchar(int fd, int timeout_ms, int *ch)
     }
 }
 
-void keyboard_thread_func(struct mvvm *vm)
+void keyboard_thread_func(mvvm *vm)
 {
     fprintf(stderr, "Press Ctrl+A & Ctrl+C to exit...\n");
     set_terminal_raw_mode();
@@ -199,9 +199,9 @@ static int parse_memory_size(const char *str, uint64_t *result)
     return 0;
 }
 
-struct cmd_opts parse_opts(int argc, char **argv)
+cmd_opts parse_opts(int argc, char **argv)
 {
-    struct cmd_opts opts = {.kernel_path = NULL,
+    cmd_opts opts = {.kernel_path = NULL,
                             .initrd_path = NULL,
                             .disk_path = NULL,
                             .memory_size = 1024LL * 1024 * 1024,
@@ -301,8 +301,8 @@ using namespace mvvmm;
 
 int main(int argc, char **argv)
 {
-    struct mvvm vm{};
-    struct cmd_opts opts = parse_opts(argc, argv);
+    mvvm vm{};
+    cmd_opts opts = parse_opts(argc, argv);
     if (vm.init(opts.memory_size, opts.disk_path, opts.tap_ifname) < 0) {
         return -1;
     }
