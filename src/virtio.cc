@@ -1007,17 +1007,6 @@ virtio_block_device::~virtio_block_device()
 
 // ===== network =====
 
-struct __attribute__((packed))
-virtio_net_header {
-    uint8_t flags;
-    uint8_t gso_type;
-    uint16_t hdr_len;
-    uint16_t gso_size;
-    uint16_t csum_start;
-    uint16_t csum_offset;
-    uint16_t num_buffers;
-};
-
 static int virtio_net_recv_request(virtio_device *s, int queue_idx, int desc_idx, int read_size,
                                    int write_size)
 {
@@ -1101,8 +1090,6 @@ std::unique_ptr<virtio_device> virtio_net_init(virtio_bus_def bus, uint64_t mmio
     // status
     s->config_space[6] = 0;
     s->config_space[7] = 0;
-
-    s->header_size = sizeof(virtio_net_header);
 
     es->device_opaque = s.get();
     es->can_write_packet_to_virtio = virtio_net_can_write_packet;

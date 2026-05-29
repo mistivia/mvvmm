@@ -223,11 +223,22 @@ struct virtio_block_device : public virtio_device {
     std::shared_ptr<block_device> bs{};
 };
 
+struct __attribute__((packed))
+virtio_net_header {
+    uint8_t flags;
+    uint8_t gso_type;
+    uint16_t hdr_len;
+    uint16_t gso_size;
+    uint16_t csum_start;
+    uint16_t csum_offset;
+    uint16_t num_buffers;
+};
+
 struct virtio_net_device: public virtio_device {
     explicit virtio_net_device() = default;
     virtual ~virtio_net_device() override;
+    int header_size = sizeof(virtio_net_header);
     std::shared_ptr<ethernet_device> es;
-    int header_size = 0;
 };
 
 } // namespace mvvmm
