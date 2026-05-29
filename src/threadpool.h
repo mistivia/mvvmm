@@ -29,7 +29,7 @@ class worker_thread;
 
 class thread_pool {
 public:
-    static thread_pool* make_instance(int thread_num);
+    static std::unique_ptr<thread_pool> make_instance(int thread_num);
     int run(std::function<void(void)> &&m_task);
     ~thread_pool();
 private:
@@ -42,13 +42,14 @@ private:
     std::mutex m_lock;
     std::atomic<bool> m_quit{false};
     friend class worker_thread;
+    friend std::unique_ptr<thread_pool> std::make_unique<thread_pool>();
 };
 
 class worker_thread {
 public:
     ~worker_thread();
 private:
-    static worker_thread* make_instance(class thread_pool *pool, int id);
+    static std::unique_ptr<worker_thread> make_instance(class thread_pool *pool, int id);
     void run();
     explicit worker_thread() = default;
     worker_thread(const worker_thread &) = delete;
@@ -61,6 +62,7 @@ private:
     thread_pool *m_pool = nullptr;
     int m_id = -1;
     friend class thread_pool;
+    friend std::unique_ptr<worker_thread> std::make_unique<worker_thread>();
 };
 
 } // namespace mvvmm

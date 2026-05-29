@@ -42,23 +42,23 @@ void worker_thread::run()
     }
 }
 
-worker_thread *worker_thread::make_instance(thread_pool *pool, int id)
+std::unique_ptr<worker_thread> worker_thread::make_instance(thread_pool *pool, int id)
 {
-    auto *self = new worker_thread{};
+    auto self = std::make_unique<worker_thread>();
     self->m_pool = pool;
     self->m_id = id;
-    self->m_th = std::thread{[=]() { self->run(); }};
+    self->m_th = std::thread{[rawself = self.get()]() { rawself->run(); }};
     return self;
 }
 
-thread_pool *thread_pool::make_instance(int thread_num)
+std::unique_ptr<thread_pool> thread_pool::make_instance(int thread_num)
 {
-    auto *self = new thread_pool{};
+    auto self = std::make_unique<thread_pool>();
     self->m_worker_num = thread_num;
     self->m_workers.resize(self->m_worker_num);
     self->m_is_working.resize(self->m_worker_num);
     for (int i = 0; i < self->m_worker_num; i++) {
-        self->m_workers[i].reset(worker_thread::make_instance(self, i));
+        self->m_workers[i] = worker_thread::make_instance(self.get(), i);
         self->m_is_working[i] = false;
     }
     return self;
