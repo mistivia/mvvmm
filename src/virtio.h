@@ -114,7 +114,7 @@ struct block_device {
     std::unique_ptr<block_device_ctx> ctx;
 };
 
-virtio_device *virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, std::shared_ptr<block_device> bs);
+std::unique_ptr<virtio_device> virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, std::shared_ptr<block_device> bs);
 void virtio_block_req_end(std::unique_ptr<blk_io_callback_arg> arg, int ret);
 
 void virtio_block_destroy(virtio_device *s);
@@ -136,13 +136,13 @@ struct ethernet_device {
                                   const uint8_t *buf, int len) = nullptr;
     std::unique_ptr<tap_net_ctx> ctx = nullptr;
     /* the following is set by the device */
-    void *device_opaque = nullptr;
+    virtio_device *device_opaque = nullptr;
     bool (*can_write_packet_to_virtio)(ethernet_device *net) = nullptr;
     void (*write_packet_to_virtio)(ethernet_device *net,
                                 const uint8_t *buf, int len) = nullptr;
 };
 
-virtio_device *virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, std::shared_ptr<ethernet_device> es);
+std::unique_ptr<virtio_device> virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, std::shared_ptr<ethernet_device> es);
 
 void virtio_net_destroy(virtio_device *s);
 
@@ -180,6 +180,7 @@ using virtio_devoce_recv_fn =
 
 struct virtio_device {
     explicit virtio_device() = default;
+    virtual ~virtio_device();
     struct guest_mem_map *mem_map = nullptr;
     /* MMIO only */
     irq_signal irq{};
@@ -205,8 +206,9 @@ struct virtio_device {
     bool ioeventfd_enabled = 0;     /* whether ioeventfd is active */
 };
 
-struct virtio_block_device {
+struct virtio_block_device : public virtio_device {
     explicit virtio_block_device() = default;
+    virtual ~virtio_block_device() override;
     enum class cmd_type : uint32_t {
         in = 0,
         out = 1,
@@ -218,13 +220,12 @@ struct virtio_block_device {
         io_err = 1,
         unsupported = 2,
     };
-    virtio_device common{};
     std::shared_ptr<block_device> bs{};
 };
 
-struct virtio_net_device {
+struct virtio_net_device: public virtio_device {
     explicit virtio_net_device() = default;
-    virtio_device common{};
+    virtual ~virtio_net_device() override;
     std::shared_ptr<ethernet_device> es;
     int header_size = 0;
 };

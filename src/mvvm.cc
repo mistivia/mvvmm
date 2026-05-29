@@ -151,7 +151,7 @@ int mvvm::init(uint64_t mem_size, const char *disk, const char *network)
     }
 
     // Allocate guest memory
-    struct guest_mem_map *mem_map = new guest_mem_map{};
+    auto mem_map = std::make_unique<guest_mem_map>();
     if (!mem_map) {
         fprintf(stderr, "failed to allocate PhysMemoryMap\n");
         return -1;
@@ -163,7 +163,7 @@ int mvvm::init(uint64_t mem_size, const char *disk, const char *network)
         return -1;
     }
     mem_map->size = mem_size;
-    m_mem_map = mem_map;
+    m_mem_map = std::move(mem_map);
 
     // Register memory regions with KVM
     if (mem_size <= RESERVED_ADDR) {
@@ -171,7 +171,7 @@ int mvvm::init(uint64_t mem_size, const char *disk, const char *network)
         mem.flags = 0;
         mem.guest_phys_addr = 0;
         mem.memory_size = mem_size;
-        mem.userspace_addr = (uint64_t)mem_map->host_mem;
+        mem.userspace_addr = (uint64_t)m_mem_map->host_mem;
         if (ioctl(m_vm_fd, KVM_SET_USER_MEMORY_REGION, &mem) < 0) {
             fprintf(stderr, "failed to set user memory region\n");
             return -1;
@@ -181,7 +181,7 @@ int mvvm::init(uint64_t mem_size, const char *disk, const char *network)
         mem.flags = 0;
         mem.guest_phys_addr = 0;
         mem.memory_size = RESERVED_ADDR;
-        mem.userspace_addr = (uint64_t)mem_map->host_mem;
+        mem.userspace_addr = (uint64_t)m_mem_map->host_mem;
         if (ioctl(m_vm_fd, KVM_SET_USER_MEMORY_REGION, &mem) < 0) {
             fprintf(stderr, "failed to set user memory region 0\n");
             return -1;
@@ -192,7 +192,7 @@ int mvvm::init(uint64_t mem_size, const char *disk, const char *network)
             mem.flags = 0;
             mem.guest_phys_addr = region1_start;
             mem.memory_size = mem_size - region1_start;
-            mem.userspace_addr = (uint64_t)mem_map->host_mem + region1_start;
+            mem.userspace_addr = (uint64_t)m_mem_map->host_mem + region1_start;
             if (ioctl(m_vm_fd, KVM_SET_USER_MEMORY_REGION, &mem) < 0) {
                 fprintf(stderr, "failed to set user memory region 1\n");
                 return -1;
@@ -233,9 +233,6 @@ mvvm::~mvvm()
     close(m_cpu_fd);
     close(m_vm_fd);
     close(m_kvm_fd);
-    mvvm_destroy_virtio_blk(this);
-    mvvm_destroy_virtio_net(this);
-    delete m_mem_map;
 }
 
 static int map_file(const char *path, size_t *size, void **out)
@@ -467,10 +464,10 @@ int mvvm::run()
             goto exit_loop;
         case KVM_EXIT_MMIO: {
             if (run->mmio.phys_addr >> 30 == 1024) {
-                virtiodev = m_blk;
+                virtiodev = m_blk.get();
                 mmio_base_addr = VIRTIO_BLK_MMIO_ADDR;
             } else if (run->mmio.phys_addr >> 30 == 1025) {
-                virtiodev = m_net;
+                virtiodev = m_net.get();
                 mmio_base_addr = VIRTIO_NET_MMIO_ADDR;
             } else {
                 break;

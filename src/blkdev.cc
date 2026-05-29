@@ -161,7 +161,7 @@ int mvvm_init_virtio_blk(mvvm *self, const char *disk_path)
 
     bus.vmfd = self->m_vm_fd;
     bus.irqline = VIRTIO_BLK_IRQ;
-    bus.mem_map = self->m_mem_map;
+    bus.mem_map = self->m_mem_map.get();
     // Initialize virtio block device
     self->m_blk = virtio_block_init(bus, VIRTIO_BLK_MMIO_ADDR, bs);
     if (!self->m_blk) {
@@ -171,12 +171,6 @@ int mvvm_init_virtio_blk(mvvm *self, const char *disk_path)
     // Note: mem_map and irq are now owned by virtio device layer
     // ctx and bs are referenced by virtio device for callbacks
     return 0;
-}
-
-void mvvm_destroy_virtio_blk(mvvm *self)
-{
-    virtio_block_destroy(self->m_blk);
-    delete self->m_blk;
 }
 
 } // namespace mvvmm

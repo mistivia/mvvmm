@@ -54,18 +54,16 @@ private:
     int m_kvm_fd = -1;
     int m_vm_fd = -1;
     int m_cpu_fd = -1;
-    struct guest_mem_map *m_mem_map = nullptr;
-    std::unique_ptr<mvvmm::serial> m_serial;
-    virtio_device *m_blk = nullptr;
-    virtio_device *m_net = nullptr;
+    std::unique_ptr<guest_mem_map> m_mem_map{};
+    std::unique_ptr<mvvmm::serial> m_serial{};
+    std::unique_ptr<virtio_device> m_blk{};
+    std::unique_ptr<virtio_device> m_net{};
     int m_quit = 0;
     uint8_t m_power_cmd = 0;
 
     friend void keyboard_thread_func(mvvm *vm);
-    friend void mvvm_destroy_virtio_blk(mvvm *self);
     friend int mvvm_init_virtio_blk(mvvm *self, const char *disk_path);
     friend void *keyboard_thread_func(void *arg);
-    friend void mvvm_destroy_virtio_net(mvvm *self);
     friend int mvvm_init_virtio_net(mvvm *self, const char *tap_ifname);
 };
 

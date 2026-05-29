@@ -22,6 +22,4 @@ class mvvm;
 int
 mvvm_init_virtio_blk(mvvm *self, const char *disk_path);
 
-void mvvm_destroy_virtio_blk(mvvm *self);
-
 } // namespace mvvmm

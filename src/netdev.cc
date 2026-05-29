@@ -159,7 +159,7 @@ int mvvm_init_virtio_net(mvvm *self, const char *tap_ifname)
     bus.irqline = VIRTIO_NET_IRQ;
 
     // Setup virtio bus definition
-    bus.mem_map = self->m_mem_map;
+    bus.mem_map = self->m_mem_map.get();
 
     // Initialize virtio network device
     self->m_net = virtio_net_init(bus, VIRTIO_NET_MMIO_ADDR, net);
@@ -177,12 +177,6 @@ int mvvm_init_virtio_net(mvvm *self, const char *tap_ifname)
         return -1;
     }
     return 0;
-}
-
-void mvvm_destroy_virtio_net(mvvm *self)
-{
-    virtio_net_destroy(self->m_net);
-    delete self->m_net;
 }
 
 } // namespace mvvmm

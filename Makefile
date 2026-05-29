@@ -41,7 +41,8 @@ tidy-checks = \
 	-clang-diagnostic-unused-const-variable, \
 	-bugprone-implicit-widening-of-multiplication-result, \
 	-bugprone-branch-clone, \
-	-clang-diagnostic-missing-braces
+	-clang-diagnostic-missing-braces, \
+	-bugprone-std-namespace-modification
 
 tidy:
 	clang-tidy --checks='$(tidy-checks)' src/*.cc
