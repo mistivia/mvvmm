@@ -44,7 +44,7 @@ struct async_io_req {
 };
 
 // Worker function executed by thread pool for disk I/O operations
-static void block_io_worker_fn(std::unique_ptr<async_io_req> req)
+static void block_io_worker_fn(std::shared_ptr<async_io_req> req)
 {
     ssize_t n = 0;
     int ret = 0;
@@ -81,7 +81,7 @@ static int64_t block_get_sector_count(block_device *bs)
 static void block_read_async(block_device *bs, uint64_t sector_num, int n,
                             block_device_comp_func cb, std::unique_ptr<blk_io_callback_arg> arg)
 {
-    auto req = std::make_unique<async_io_req>();
+    auto req = std::make_shared<async_io_req>();
 
     req->fd = bs->ctx->fd;
     req->offset = sector_num * SECTOR_SIZE;
@@ -89,14 +89,7 @@ static void block_read_async(block_device *bs, uint64_t sector_num, int n,
     req->cb = cb;
     req->arg = std::move(arg);
     req->is_write = 0;
-    // unsafe
-    auto rawreq = req.release();
-    int runret = bs->ctx->pool->run([rawreq]() { 
-        block_io_worker_fn(std::unique_ptr<async_io_req>{rawreq});
-    });
-    if (runret < 0) {
-        // unsafe
-        req = std::unique_ptr<async_io_req>(rawreq);
+    if (bs->ctx->pool->run([req]() {block_io_worker_fn(req);}) < 0) {
         virtio_block_req_end(std::move(req->arg), -1);
         return;
     }
@@ -108,7 +101,7 @@ static void block_read_async(block_device *bs, uint64_t sector_num, int n,
 static void block_write_async(block_device *bs, uint64_t sector_num, int n,
                               block_device_comp_func cb, std::unique_ptr<blk_io_callback_arg> arg)
 {
-    auto req = std::make_unique<async_io_req>();
+    auto req = std::make_shared<async_io_req>();
 
     req->fd = bs->ctx->fd;
     req->offset = sector_num * SECTOR_SIZE;
@@ -117,11 +110,7 @@ static void block_write_async(block_device *bs, uint64_t sector_num, int n,
     req->cb = cb;
     req->arg = std::move(arg);
     req->is_write = 1;
-    // unsafe
-    auto rawreq = req.release();
-    if (bs->ctx->pool->run([rawreq]() { block_io_worker_fn(std::unique_ptr<async_io_req>(rawreq)); }) < 0) {
-        // unsafe
-        req = std::unique_ptr<async_io_req>(rawreq);
+    if (bs->ctx->pool->run([req]() { block_io_worker_fn(req); }) < 0) {
         virtio_block_req_end(std::move(req->arg), -1);
         return;
     }
@@ -132,10 +121,8 @@ static void block_write_async(block_device *bs, uint64_t sector_num, int n,
 // Initialize virtio block device with thread pool backend
 int mvvm_init_virtio_blk(mvvm *self, const char *disk_path)
 {
-    block_device *bs = NULL;
     struct stat st = {0};
     virtio_bus_def bus{};
-    int ret = -1;
     // Allocate block device context
     auto ctx = std::make_unique<block_device_ctx>();
     if (!ctx) {
@@ -146,25 +133,25 @@ int mvvm_init_virtio_blk(mvvm *self, const char *disk_path)
     ctx->fd = open(disk_path, O_RDWR);
     if (ctx->fd < 0) {
         perror("mvvm_init_virtio_blk, open disk image");
-        goto fail;
+        return -1;
     }
     // Get file size
     if (fstat(ctx->fd, &st) < 0) {
         perror("mvvm_init_virtio_blk, fstat disk image");
-        goto fail;
+        return -1;
     }
     ctx->size = st.st_size;
     // Create thread pool for async I/O operations
     ctx->pool = std::unique_ptr<thread_pool>(thread_pool::make_instance(VIRTIO_BLK_MAX_QUEUE_NUM));
     if (!ctx->pool) {
         fprintf(stderr, "failed to create thread pool\n");
-        goto fail;
+        return -1;
     }
     // Allocate and initialize block_device structure
-    bs = new block_device{};
+    auto bs = std::make_shared<block_device>();
     if (!bs) {
         fprintf(stderr, "failed to allocate block_device structure\n");
-        goto fail;
+        return -1;
     }
 
     bs->get_sector_count = block_get_sector_count;
@@ -179,17 +166,11 @@ int mvvm_init_virtio_blk(mvvm *self, const char *disk_path)
     self->m_blk = virtio_block_init(bus, VIRTIO_BLK_MMIO_ADDR, bs);
     if (!self->m_blk) {
         fprintf(stderr, "failed to initialize virtio block device\n");
-        goto fail;
+        return -1;
     }
     // Note: mem_map and irq are now owned by virtio device layer
     // ctx and bs are referenced by virtio device for callbacks
     return 0;
-
-fail:
-    if (bs) {
-        delete bs;
-    }
-    return ret;
 }
 
 void mvvm_destroy_virtio_blk(mvvm *self)

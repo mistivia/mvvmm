@@ -114,7 +114,7 @@ struct block_device {
     std::unique_ptr<block_device_ctx> ctx;
 };
 
-virtio_device *virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, block_device *bs);
+virtio_device *virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, std::shared_ptr<block_device> bs);
 void virtio_block_req_end(std::unique_ptr<blk_io_callback_arg> arg, int ret);
 
 void virtio_block_destroy(virtio_device *s);
@@ -219,7 +219,7 @@ struct virtio_block_device {
         unsupported = 2,
     };
     virtio_device common{};
-    block_device *bs = nullptr;
+    std::shared_ptr<block_device> bs{};
 };
 
 struct virtio_net_device {

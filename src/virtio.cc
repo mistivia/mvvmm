@@ -937,7 +937,6 @@ static int virtio_block_recv_request(virtio_device *s, int queue_idx, int desc_i
                                      int write_size)
 {
     virtio_block_device *s1 = (virtio_block_device *)s;
-    block_device *bs = s1->bs;
     block_request_header h = {0};
     int len;
 
@@ -953,7 +952,7 @@ static int virtio_block_recv_request(virtio_device *s, int queue_idx, int desc_i
         iocb_arg->req.buf = std::make_unique<uint8_t[]>(write_size);
         memset(iocb_arg->req.buf.get(), 0, write_size);
         iocb_arg->req.write_size = write_size;
-        bs->read_async(bs, h.sector_num, (write_size - 1) / SECTOR_SIZE,
+        s1->bs->read_async(s1->bs.get(), h.sector_num, (write_size - 1) / SECTOR_SIZE,
                              virtio_block_req_cb, std::move(iocb_arg));
         break;
     case (uint32_t)virtio_block_device::cmd_type::out:
@@ -969,7 +968,7 @@ static int virtio_block_recv_request(virtio_device *s, int queue_idx, int desc_i
         iocb_arg->req.buf = std::make_unique<uint8_t[]>(len);
         memset(iocb_arg->req.buf.get(), 0, len);
         memcpy_from_queue(s, iocb_arg->req.buf.get(), queue_idx, desc_idx, sizeof(h), len);
-        bs->write_async(bs, h.sector_num, len / SECTOR_SIZE, virtio_block_req_cb,
+        s1->bs->write_async(s1->bs.get(), h.sector_num, len / SECTOR_SIZE, virtio_block_req_cb,
                               std::move(iocb_arg));
         break;
     default:
@@ -978,7 +977,7 @@ static int virtio_block_recv_request(virtio_device *s, int queue_idx, int desc_i
     return 0;
 }
 
-virtio_device *virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, block_device *bs)
+virtio_device *virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, std::shared_ptr<block_device> bs)
 {
     virtio_block_device *s = {0};
     uint64_t nb_sectors = {0};
@@ -990,7 +989,7 @@ virtio_device *virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, block_d
     }
     s->bs = bs;
 
-    nb_sectors = bs->get_sector_count(bs);
+    nb_sectors = bs->get_sector_count(bs.get());
     put_le32(s->common.config_space, nb_sectors);
     put_le32(s->common.config_space + 4, nb_sectors >> 32);
 
@@ -999,10 +998,8 @@ virtio_device *virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, block_d
 
 void virtio_block_destroy(virtio_device *s)
 {
-    virtio_block_device *bs = (virtio_block_device *)s;
     virtio_ioeventfd_stop(s);
     s->irq.~irq_signal();
-    delete bs->bs;
 }
 
 // ===== network =====
@@ -1023,16 +1020,14 @@ static int virtio_net_recv_request(virtio_device *s, int queue_idx, int desc_idx
 {
     virtio_net_device *s1 = (virtio_net_device *)s;
     virtio_net_header h = {0};
-    uint8_t *buf = {0};
     int len = {0};
     if (memcpy_from_queue(s, &h, queue_idx, desc_idx, 0, s1->header_size) < 0)
         return 0;
     len = read_size - s1->header_size;
-    buf = new uint8_t[len];
-    memset(buf, 0, len);
-    memcpy_from_queue(s, buf, queue_idx, desc_idx, s1->header_size, len);
-    s1->es->write_packet_to_ether(s1->es.get(), buf, len);
-    delete[] buf;
+    auto buf = std::make_unique<uint8_t[]>(len);
+    memset(buf.get(), 0, len);
+    memcpy_from_queue(s, buf.get(), queue_idx, desc_idx, s1->header_size, len);
+    s1->es->write_packet_to_ether(s1->es.get(), buf.get(), len);
     virtio_consume_desc(s, queue_idx, desc_idx, 0);
     return 0;
 }
