@@ -32,6 +32,8 @@
 #include <mutex>
 #include <functional>
 
+#include <linux/if.h>
+
 namespace mvvmm {
 
 using virtio_phys_addr_t = uint64_t;
@@ -113,15 +115,26 @@ struct block_device {
 };
 
 virtio_device *virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, block_device *bs);
+void virtio_block_req_end(std::unique_ptr<blk_io_callback_arg> arg, int ret);
 
 void virtio_block_destroy(virtio_device *s);
-void virtio_block_req_end(std::unique_ptr<blk_io_callback_arg> arg, int ret);
+
+struct tap_net_ctx {
+    explicit tap_net_ctx() = default;
+    ~tap_net_ctx();
+    int fd = -1;
+    char ifname[IFNAMSIZ] = {0};
+    std::thread rx_thread{};
+    int quit = 0;
+    std::mutex lock{};
+};
+
 struct ethernet_device {
     explicit ethernet_device() = default;
     uint8_t mac_addr[6] = {0}; /* mac address of the interface */
     void (*write_packet_to_ether)(ethernet_device *net,
                                   const uint8_t *buf, int len) = nullptr;
-    void *opaque = nullptr;
+    std::unique_ptr<tap_net_ctx> ctx = nullptr;
     /* the following is set by the device */
     void *device_opaque = nullptr;
     bool (*can_write_packet_to_virtio)(ethernet_device *net) = nullptr;
@@ -129,10 +142,9 @@ struct ethernet_device {
                                 const uint8_t *buf, int len) = nullptr;
 };
 
-virtio_device *virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, ethernet_device *es);
+virtio_device *virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, std::shared_ptr<ethernet_device> es);
 
 void virtio_net_destroy(virtio_device *s);
-void* virtio_net_get_opaque(virtio_device *s);
 
 constexpr static int VIRTIO_MAX_QUEUE = 2;
 constexpr static int VIRTIO_MAX_CONFIG_SPACE_SIZE = 256;
@@ -213,7 +225,7 @@ struct virtio_block_device {
 struct virtio_net_device {
     explicit virtio_net_device() = default;
     virtio_device common{};
-    ethernet_device *es = nullptr;
+    std::shared_ptr<ethernet_device> es;
     int header_size = 0;
 };
 

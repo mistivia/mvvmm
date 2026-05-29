@@ -24,7 +24,7 @@ struct kvm_run;
 
 namespace mvvmm {
 
-struct mvvm;
+class mvvm;
 
 class serial {
 public:

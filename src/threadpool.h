@@ -48,7 +48,7 @@ class worker_thread {
 public:
     ~worker_thread();
 private:
-    static worker_thread* make_instance(struct thread_pool *pool, int id);
+    static worker_thread* make_instance(class thread_pool *pool, int id);
     void run();
     explicit worker_thread() = default;
     worker_thread(const worker_thread &) = delete;

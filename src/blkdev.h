@@ -17,7 +17,7 @@
 #pragma once
 namespace mvvmm {
 
-struct mvvm;
+class mvvm;
 
 int
 mvvm_init_virtio_blk(mvvm *self, const char *disk_path);

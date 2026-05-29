@@ -33,6 +33,19 @@ fmt:
 clean:
 	rm -rf $(BUILD_DIR)
 
+tidy-checks = \
+	bugprone-*, \
+	-bugprone-easily-swappable-parameters, \
+	-bugprone-narrowing-conversions, \
+	-bugprone-implicit-widening-of-multiplication-result, \
+	-clang-diagnostic-unused-const-variable, \
+	-bugprone-implicit-widening-of-multiplication-result, \
+	-bugprone-branch-clone, \
+	-clang-diagnostic-missing-braces
+
+tidy:
+	clang-tidy --checks='$(tidy-checks)' src/*.cc
+
 .PHONY: all clean test bear
 
 -include $(CXX_DEPS)

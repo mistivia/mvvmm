@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include <cstdio>
 
+#include <memory>
 #include <poll.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -37,22 +38,12 @@
 
 namespace mvvmm {
 
-struct tap_net_ctx {
-    explicit tap_net_ctx() = default;
-    int fd = -1;
-    char ifname[IFNAMSIZ] = {0};
-    std::thread rx_thread{};
-    int quit = 0;
-    std::mutex lock{};
-};
-
 static void write_packet_to_ether(ethernet_device *net, const uint8_t *buf, int len)
 {
-    tap_net_ctx *ctx = (tap_net_ctx *)net->opaque;
-    if (!ctx || ctx->fd < 0 || !buf || len <= 0) {
+    if (!net->ctx || net->ctx->fd < 0 || !buf || len <= 0) {
         return;
     }
-    write(ctx->fd, buf, len);
+    write(net->ctx->fd, buf, len);
 }
 
 static ssize_t timed_read(int fd, void *buf, size_t len, int timeout_ms)
@@ -82,23 +73,21 @@ static ssize_t timed_read(int fd, void *buf, size_t len, int timeout_ms)
     return -1;
 }
 
-static void *tap_net_rx_thread(void *arg)
+static void tap_net_rx_thread(std::shared_ptr<ethernet_device> net)
 {
-    ethernet_device *net = (ethernet_device *)arg;
-    tap_net_ctx *ctx = (tap_net_ctx *)net->opaque;
     uint8_t buf[TAP_BUF_SIZE] = {0};
 
-    if (!ctx || ctx->fd < 0) {
-        return NULL;
+    if (!net->ctx || net->ctx->fd < 0) {
+        return;
     }
 
     while (1) {
-        ssize_t len = timed_read(ctx->fd, buf, sizeof(buf), 300);
+        ssize_t len = timed_read(net->ctx->fd, buf, sizeof(buf), 300);
         if (len < 0) {
             if (errno == EINTR || errno == ETIMEDOUT) {
-                std::unique_lock<std::mutex> lk{ctx->lock};
-                if (ctx->quit) {
-                    return NULL;
+                std::unique_lock<std::mutex> lk{net->ctx->lock};
+                if (net->ctx->quit) {
+                    return;
                 }
                 continue;
             }
@@ -112,36 +101,27 @@ static void *tap_net_rx_thread(void *arg)
         }
 
         // Check if virtio net device can receive packet
-        if (net->can_write_packet_to_virtio && net->can_write_packet_to_virtio(net)) {
-            net->write_packet_to_virtio(net, buf, len);
+        if (net->can_write_packet_to_virtio && net->can_write_packet_to_virtio(net.get())) {
+            net->write_packet_to_virtio(net.get(), buf, len);
         }
         // If virtio queue is full, packet is dropped
     }
-
-    return NULL;
 }
 
 // Initialize virtio network device with TAP backend
 int mvvm_init_virtio_net(mvvm *self, const char *tap_ifname)
 {
-    tap_net_ctx *ctx = NULL;
-    ethernet_device *net = NULL;
     virtio_bus_def bus;
     ifreq ifr = {0};
-    int ret = -1;
 
     // Allocate TAP device context
-    ctx = new tap_net_ctx{};
-    if (!ctx) {
-        fprintf(stderr, "failed to allocate TAP network context\n");
-        return -1;
-    }
+    auto ctx = std::make_unique<tap_net_ctx>();
     ctx->quit = 0;
     // Open TUN/TAP clone device
     ctx->fd = open("/dev/net/tun", O_RDWR | O_NONBLOCK);
     if (ctx->fd < 0) {
         perror("mvvm_init_virtio_net: open /dev/net/tun failed");
-        goto fail;
+        return -1;
     }
 
     // Configure device as TAP (Ethernet layer) without packet info header
@@ -153,7 +133,7 @@ int mvvm_init_virtio_net(mvvm *self, const char *tap_ifname)
 
     if (ioctl(ctx->fd, TUNSETIFF, &ifr) < 0) {
         perror("mvvm_init_virtio_net: ioctl TUNSETIFF failed");
-        goto fail;
+        return -1;
     }
 
     // Store the actual interface name assigned by kernel
@@ -161,11 +141,7 @@ int mvvm_init_virtio_net(mvvm *self, const char *tap_ifname)
     ctx->ifname[IFNAMSIZ - 1] = '\0';
 
     // Allocate and initialize ethernet_device structure
-    net = new ethernet_device{};
-    if (!net) {
-        fprintf(stderr, "failed to allocate ethernet_device structure\n");
-        goto fail;
-    }
+    auto net = std::make_shared<ethernet_device>();
 
     // Set locally administered MAC address (52:54:00:12:34:56)
     // In production, this should be configurable or derived from TAP
@@ -177,7 +153,7 @@ int mvvm_init_virtio_net(mvvm *self, const char *tap_ifname)
     net->mac_addr[5] = 0x56;
 
     net->write_packet_to_ether = write_packet_to_ether;
-    net->opaque = ctx;
+    net->ctx = std::move(ctx);
 
     bus.vmfd = self->m_vm_fd;
     bus.irqline = VIRTIO_NET_IRQ;
@@ -189,43 +165,22 @@ int mvvm_init_virtio_net(mvvm *self, const char *tap_ifname)
     self->m_net = virtio_net_init(bus, VIRTIO_NET_MMIO_ADDR, net);
     if (!self->m_net) {
         fprintf(stderr, "failed to initialize virtio net device\n");
-        goto fail;
+        return -1;
     }
     // Start RX thread to handle incoming packets from TAP
     try {
-        ctx->rx_thread = std::thread{[net](){
+        net->ctx->rx_thread = std::thread{[net](){
             tap_net_rx_thread(net);
         }};
     } catch (...) {
         fprintf(stderr, "failed to create TAP RX thread\n");
-        goto fail;
+        return -1;
     }
     return 0;
-
-fail:
-    if (net) {
-        delete net;
-    }
-    if (ctx) {
-        if (ctx->fd >= 0) {
-            close(ctx->fd);
-        }
-        delete ctx;
-    }
-    return ret;
 }
 
 void mvvm_destroy_virtio_net(mvvm *self)
 {
-    tap_net_ctx *ctx = (tap_net_ctx *)virtio_net_get_opaque(self->m_net);
-    {
-        std::unique_lock<std::mutex> lk{ctx->lock};
-        ctx->quit = 1;
-    }
-    if (ctx->rx_thread.joinable()) {
-        ctx->rx_thread.join();
-    }
-    delete ctx;
     virtio_net_destroy(self->m_net);
     delete self->m_net;
 }

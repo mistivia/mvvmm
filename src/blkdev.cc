@@ -17,7 +17,6 @@
 #include <memory>
 #include <stdlib.h>
 #include <stdio.h>
-#include <errno.h>
 #include <stdint.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -90,6 +89,7 @@ static void block_read_async(block_device *bs, uint64_t sector_num, int n,
     req->cb = cb;
     req->arg = std::move(arg);
     req->is_write = 0;
+    // unsafe
     auto rawreq = req.release();
     int runret = bs->ctx->pool->run([rawreq]() { 
         block_io_worker_fn(std::unique_ptr<async_io_req>{rawreq});
@@ -117,6 +117,7 @@ static void block_write_async(block_device *bs, uint64_t sector_num, int n,
     req->cb = cb;
     req->arg = std::move(arg);
     req->is_write = 1;
+    // unsafe
     auto rawreq = req.release();
     if (bs->ctx->pool->run([rawreq]() { block_io_worker_fn(std::unique_ptr<async_io_req>(rawreq)); }) < 0) {
         // unsafe

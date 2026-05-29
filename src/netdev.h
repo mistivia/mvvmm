@@ -17,11 +17,11 @@
 #pragma once
 namespace mvvmm {
 
-struct mvvm;
+class mvvm;
 
 int
-mvvm_init_virtio_net(struct mvvm *self, const char *tap_name);
+mvvm_init_virtio_net(mvvm *self, const char *tap_name);
 
-void mvvm_destroy_virtio_net(struct mvvm *self);
+void mvvm_destroy_virtio_net(mvvm *self);
 
 } // namespace mvvmm

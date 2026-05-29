@@ -47,7 +47,7 @@ void serial::clear_irq()
 
 void serial::write_reg(int offset, uint8_t data) { m_regs[offset] = data; }
 
-void write_to_serial(struct mvvm *vm, char c) {}
+void write_to_serial(mvvm *vm, char c) {}
 
 uint8_t serial::read_reg(int offset)
 {

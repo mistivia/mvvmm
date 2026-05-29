@@ -128,6 +128,19 @@ block_device_ctx::~block_device_ctx() {
     }
 }
 
+tap_net_ctx::~tap_net_ctx() {
+    if (this->fd >= 0) {
+        close(this->fd);
+    }
+    {
+        std::unique_lock<std::mutex> lk{this->lock};
+        this->quit = 1;
+    }
+    if (this->rx_thread.joinable()) {
+        this->rx_thread.join();
+    }
+}
+
 static void virtio_reset(virtio_device *s)
 {
     int i = 0;
@@ -692,6 +705,9 @@ static void virtio_config_write(virtio_device *s, uint32_t offset, uint32_t val,
             put_le32(s->config_space + offset, val);
         }
         break;
+    default:
+        abort();
+        break;
     }
 }
 
@@ -855,6 +871,8 @@ void virtio_mmio_write(virtio_device *s, uint32_t offset, uint32_t val, int size
         case VIRTIO_MMIO_INTERRUPT_ACK:
             s->int_status &= ~val;
             break;
+        default:
+            break;
         }
     } else {
         fprintf(stderr, "virtio mmio write error: len != 4\n");
@@ -1004,7 +1022,6 @@ static int virtio_net_recv_request(virtio_device *s, int queue_idx, int desc_idx
                                    int write_size)
 {
     virtio_net_device *s1 = (virtio_net_device *)s;
-    ethernet_device *es = s1->es;
     virtio_net_header h = {0};
     uint8_t *buf = {0};
     int len = {0};
@@ -1014,7 +1031,7 @@ static int virtio_net_recv_request(virtio_device *s, int queue_idx, int desc_idx
     buf = new uint8_t[len];
     memset(buf, 0, len);
     memcpy_from_queue(s, buf, queue_idx, desc_idx, s1->header_size, len);
-    es->write_packet_to_ether(es, buf, len);
+    s1->es->write_packet_to_ether(s1->es.get(), buf, len);
     delete[] buf;
     virtio_consume_desc(s, queue_idx, desc_idx, 0);
     return 0;
@@ -1072,7 +1089,7 @@ static void virtio_net_write_packet(ethernet_device *es, const uint8_t *buf, int
     qs->last_avail_idx++;
 }
 
-virtio_device *virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, ethernet_device *es)
+virtio_device *virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, std::shared_ptr<ethernet_device> es)
 {
     virtio_net_device *s = NULL;
     s = new virtio_net_device();
@@ -1084,7 +1101,6 @@ virtio_device *virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, ethernet_
     // VIRTIO_NET_F_MAC
     s->common.device_features = (1 << 5);
     s->common.queue[0].manual_recv = true;
-    s->es = es;
     memcpy(s->common.config_space, es->mac_addr, 6);
     // status
     s->common.config_space[6] = 0;
@@ -1095,21 +1111,14 @@ virtio_device *virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, ethernet_
     es->device_opaque = s;
     es->can_write_packet_to_virtio = virtio_net_can_write_packet;
     es->write_packet_to_virtio = virtio_net_write_packet;
+    s->es = es;
     return (virtio_device *)s;
 }
 
 void virtio_net_destroy(virtio_device *s)
 {
-    virtio_net_device *es = (virtio_net_device *)s;
     virtio_ioeventfd_stop(s);
     s->irq.~irq_signal();
-    delete es->es;
-}
-
-void *virtio_net_get_opaque(virtio_device *s)
-{
-    virtio_net_device *es = (virtio_net_device *)s;
-    return es->es->opaque;
 }
 
 } // namespace mvvmm
