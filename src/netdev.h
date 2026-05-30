@@ -15,9 +15,22 @@
  */
 
 #pragma once
+#include "virtio.h"
 namespace mvvmm {
 
 class mvvm;
+
+struct tap_net_impl: public ethernet_device {
+    explicit tap_net_impl() = default;
+    virtual ~tap_net_impl() override;
+    int fd = -1;
+    char ifname[IFNAMSIZ] = {0};
+    std::thread rx_thread{};
+    int quit = 0;
+    std::mutex lock{};
+
+    virtual void write_packet_to_ether(const uint8_t *buf, int len) override;
+};
 
 int
 mvvm_init_virtio_net(mvvm *self, const char *tap_name);

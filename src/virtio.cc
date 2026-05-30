@@ -122,24 +122,6 @@ static uint16_t get_le16(void *ptr)
     return ((uint16_t)p[0]) | ((uint16_t)p[1] << 8);
 }
 
-block_device_ctx::~block_device_ctx() {
-    if (this->fd >= 0) {
-        close(this->fd);
-    }
-}
-
-tap_net_ctx::~tap_net_ctx() {
-    if (this->fd >= 0) {
-        close(this->fd);
-    }
-    {
-        std::unique_lock<std::mutex> lk{this->lock};
-        this->quit = 1;
-    }
-    if (this->rx_thread.joinable()) {
-        this->rx_thread.join();
-    }
-}
 
 static void virtio_reset(virtio_device *s)
 {
@@ -952,8 +934,8 @@ static int virtio_block_recv_request(virtio_device *s, int queue_idx, int desc_i
         iocb_arg->req.buf = std::make_unique<uint8_t[]>(write_size);
         memset(iocb_arg->req.buf.get(), 0, write_size);
         iocb_arg->req.write_size = write_size;
-        s1->bs->read_async(s1->bs.get(), h.sector_num, (write_size - 1) / SECTOR_SIZE,
-                             virtio_block_req_cb, std::move(iocb_arg));
+        s1->bs->read_async(h.sector_num, (write_size - 1) / SECTOR_SIZE,
+                           virtio_block_req_cb, std::move(iocb_arg));
         break;
     case (uint32_t)virtio_block_device::cmd_type::out:
         if (write_size < 1) {
@@ -968,7 +950,7 @@ static int virtio_block_recv_request(virtio_device *s, int queue_idx, int desc_i
         iocb_arg->req.buf = std::make_unique<uint8_t[]>(len);
         memset(iocb_arg->req.buf.get(), 0, len);
         memcpy_from_queue(s, iocb_arg->req.buf.get(), queue_idx, desc_idx, sizeof(h), len);
-        s1->bs->write_async(s1->bs.get(), h.sector_num, len / SECTOR_SIZE, virtio_block_req_cb,
+        s1->bs->write_async(h.sector_num, len / SECTOR_SIZE, virtio_block_req_cb,
                               std::move(iocb_arg));
         break;
     default:
@@ -986,8 +968,7 @@ std::unique_ptr<virtio_device> virtio_block_init(virtio_bus_def bus, uint64_t mm
         return nullptr;
     }
     s->bs = bs;
-
-    nb_sectors = bs->get_sector_count(bs.get());
+    nb_sectors = bs->get_sector_count();
     put_le32(s->config_space, nb_sectors);
     put_le32(s->config_space + 4, nb_sectors >> 32);
 
@@ -1019,15 +1000,15 @@ static int virtio_net_recv_request(virtio_device *s, int queue_idx, int desc_idx
     auto buf = std::make_unique<uint8_t[]>(len);
     memset(buf.get(), 0, len);
     memcpy_from_queue(s, buf.get(), queue_idx, desc_idx, s1->header_size, len);
-    s1->es->write_packet_to_ether(s1->es.get(), buf.get(), len);
+    s1->es->write_packet_to_ether(buf.get(), len);
     virtio_consume_desc(s, queue_idx, desc_idx, 0);
     return 0;
 }
 
-static bool virtio_net_can_write_packet(ethernet_device *es)
+bool ethernet_device::can_write_packet_to_virtio()
 {
     bool ret = 0;
-    virtio_device *s = (virtio_device *)es->device_opaque;
+    virtio_device *s = (virtio_device *)owner;
     std::unique_lock<std::mutex> lk{s->lock};
     queue_state *qs = &s->queue[0];
     uint16_t avail_idx = {0};
@@ -1041,9 +1022,9 @@ static bool virtio_net_can_write_packet(ethernet_device *es)
     return ret;
 }
 
-static void virtio_net_write_packet(ethernet_device *es, const uint8_t *buf, int buf_len)
+void ethernet_device::write_packet_to_virtio(const uint8_t *buf, int buf_len)
 {
-    virtio_device *s = (virtio_device *)es->device_opaque;
+    virtio_device *s = (virtio_device *)owner;
     std::unique_lock<std::mutex> lk{s->lock};
 
     virtio_net_device *s1 = (virtio_net_device *)s;
@@ -1079,6 +1060,7 @@ static void virtio_net_write_packet(ethernet_device *es, const uint8_t *buf, int
 std::unique_ptr<virtio_device> virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, std::shared_ptr<ethernet_device> es)
 {
     auto s = std::make_unique<virtio_net_device>();
+    es->owner = s.get();
     if (virtio_init(s.get(), std::move(bus), mmio_addr, 1, 6 + 2, virtio_net_recv_request,
                     VIRTIO_NET_MAX_QUEUE_NUM) < 0) {
         return NULL;
@@ -1090,10 +1072,6 @@ std::unique_ptr<virtio_device> virtio_net_init(virtio_bus_def bus, uint64_t mmio
     // status
     s->config_space[6] = 0;
     s->config_space[7] = 0;
-
-    es->device_opaque = s.get();
-    es->can_write_packet_to_virtio = virtio_net_can_write_packet;
-    es->write_packet_to_virtio = virtio_net_write_packet;
     s->es = es;
     return s;
 }

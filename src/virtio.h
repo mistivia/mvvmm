@@ -94,57 +94,32 @@ struct blk_io_callback_arg {
     block_request req{};
 };
 
-struct block_device_ctx {
-    explicit block_device_ctx() = default;
-    ~block_device_ctx();
-    int fd = -1;
-    uint64_t size = 0;
-    std::unique_ptr<thread_pool> pool;
-};
-
 struct block_device {
     explicit block_device() = default;
-    int64_t (*get_sector_count)(block_device *bs) = nullptr;
-    void (*read_async)(block_device *bs,
-                      uint64_t sector_num, int n, // n is sector number
-                      block_device_comp_func cb, std::unique_ptr<blk_io_callback_arg> cbarg) = nullptr;
-    void (*write_async)(block_device *bs,
-                       uint64_t sector_num, int n, // n is sector nubmer
-                       block_device_comp_func cb, std::unique_ptr<blk_io_callback_arg> cbarg) = nullptr;
-    std::unique_ptr<block_device_ctx> ctx;
+    virtual ~block_device() {}
+
+    virtual int64_t get_sector_count() = 0;
+    virtual void read_async(uint64_t sector_num, int n, // n is sector number
+                            block_device_comp_func cb, std::unique_ptr<blk_io_callback_arg> cbarg) = 0;
+    virtual void write_async(uint64_t sector_num, int n, // n is sector nubmer
+                             block_device_comp_func cb, std::unique_ptr<blk_io_callback_arg> cbarg) = 0;
 };
 
 std::unique_ptr<virtio_device> virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, std::shared_ptr<block_device> bs);
 void virtio_block_req_end(std::unique_ptr<blk_io_callback_arg> arg, int ret);
 
-void virtio_block_destroy(virtio_device *s);
-
-struct tap_net_ctx {
-    explicit tap_net_ctx() = default;
-    ~tap_net_ctx();
-    int fd = -1;
-    char ifname[IFNAMSIZ] = {0};
-    std::thread rx_thread{};
-    int quit = 0;
-    std::mutex lock{};
-};
-
 struct ethernet_device {
     explicit ethernet_device() = default;
+    virtual ~ethernet_device() {}
     uint8_t mac_addr[6] = {0}; /* mac address of the interface */
-    void (*write_packet_to_ether)(ethernet_device *net,
-                                  const uint8_t *buf, int len) = nullptr;
-    std::unique_ptr<tap_net_ctx> ctx = nullptr;
-    /* the following is set by the device */
-    virtio_device *device_opaque = nullptr;
-    bool (*can_write_packet_to_virtio)(ethernet_device *net) = nullptr;
-    void (*write_packet_to_virtio)(ethernet_device *net,
-                                const uint8_t *buf, int len) = nullptr;
+    virtio_device *owner = nullptr;
+
+    virtual void write_packet_to_ether(const uint8_t *buf, int len) = 0;
+    bool can_write_packet_to_virtio();
+    void write_packet_to_virtio(const uint8_t *buf, int len);
 };
 
 std::unique_ptr<virtio_device> virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, std::shared_ptr<ethernet_device> es);
-
-void virtio_net_destroy(virtio_device *s);
 
 constexpr static int VIRTIO_MAX_QUEUE = 2;
 constexpr static int VIRTIO_MAX_CONFIG_SPACE_SIZE = 256;
