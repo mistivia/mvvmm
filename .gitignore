@@ -22,4 +22,6 @@ ramdisk/
 .bashrc
 .inputrc
 .Xauthority
+runagent.sh
+runagents.sh
 compile_commands.json
