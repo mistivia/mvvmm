@@ -1008,28 +1008,26 @@ static int virtio_net_recv_request(virtio_device *s, int queue_idx, int desc_idx
 bool ethernet_device::can_write_packet_to_virtio()
 {
     bool ret = 0;
-    virtio_device *s = (virtio_device *)owner;
-    std::unique_lock<std::mutex> lk{s->lock};
-    queue_state *qs = &s->queue[0];
+    std::unique_lock<std::mutex> lk{m_owner->lock};
+    queue_state *qs = &m_owner->queue[0];
     uint16_t avail_idx = {0};
 
     if (!qs->ready) {
         ret = false;
         return ret;
     }
-    avail_idx = virtio_read16(s, qs->avail_addr + 2);
+    avail_idx = virtio_read16(m_owner, qs->avail_addr + 2);
     ret = qs->last_avail_idx != avail_idx;
     return ret;
 }
 
 void ethernet_device::write_packet_to_virtio(const uint8_t *buf, int buf_len)
 {
-    virtio_device *s = (virtio_device *)owner;
-    std::unique_lock<std::mutex> lk{s->lock};
+    std::unique_lock<std::mutex> lk{m_owner->lock};
 
-    virtio_net_device *s1 = (virtio_net_device *)s;
+    virtio_net_device *s1 = (virtio_net_device *)m_owner;
     int queue_idx = 0;
-    queue_state *qs = &s->queue[queue_idx];
+    queue_state *qs = &m_owner->queue[queue_idx];
     int desc_idx = {0};
     virtio_net_header h = {0};
     int len = {0}, read_size = {0}, write_size = {0};
@@ -1038,12 +1036,12 @@ void ethernet_device::write_packet_to_virtio(const uint8_t *buf, int buf_len)
     if (!qs->ready) {
         return;
     }
-    avail_idx = virtio_read16(s, qs->avail_addr + 2);
+    avail_idx = virtio_read16(m_owner, qs->avail_addr + 2);
     if (qs->last_avail_idx == avail_idx) {
         return;
     }
-    desc_idx = virtio_read16(s, qs->avail_addr + 4 + (qs->last_avail_idx & (qs->num - 1)) * 2);
-    if (get_desc_rw_size(s, &read_size, &write_size, queue_idx, desc_idx)) {
+    desc_idx = virtio_read16(m_owner, qs->avail_addr + 4 + (qs->last_avail_idx & (qs->num - 1)) * 2);
+    if (get_desc_rw_size(m_owner, &read_size, &write_size, queue_idx, desc_idx)) {
         return;
     }
     len = s1->header_size + buf_len;
@@ -1051,16 +1049,16 @@ void ethernet_device::write_packet_to_virtio(const uint8_t *buf, int buf_len)
         return;
     }
     memset(&h, 0, s1->header_size);
-    memcpy_to_queue(s, queue_idx, desc_idx, 0, &h, s1->header_size);
-    memcpy_to_queue(s, queue_idx, desc_idx, s1->header_size, buf, buf_len);
-    virtio_consume_desc(s, queue_idx, desc_idx, len);
+    memcpy_to_queue(m_owner, queue_idx, desc_idx, 0, &h, s1->header_size);
+    memcpy_to_queue(m_owner, queue_idx, desc_idx, s1->header_size, buf, buf_len);
+    virtio_consume_desc(m_owner, queue_idx, desc_idx, len);
     qs->last_avail_idx++;
 }
 
 std::unique_ptr<virtio_device> virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, std::shared_ptr<ethernet_device> es)
 {
     auto s = std::make_unique<virtio_net_device>();
-    es->owner = s.get();
+    es->m_owner = s.get();
     if (virtio_init(s.get(), std::move(bus), mmio_addr, 1, 6 + 2, virtio_net_recv_request,
                     VIRTIO_NET_MAX_QUEUE_NUM) < 0) {
         return NULL;
@@ -1068,7 +1066,7 @@ std::unique_ptr<virtio_device> virtio_net_init(virtio_bus_def bus, uint64_t mmio
     // VIRTIO_NET_F_MAC
     s->device_features = (1 << 5);
     s->queue[0].manual_recv = true;
-    memcpy(s->config_space, es->mac_addr, 6);
+    memcpy(s->config_space, es->m_mac_addr, 6);
     // status
     s->config_space[6] = 0;
     s->config_space[7] = 0;

@@ -94,7 +94,8 @@ struct blk_io_callback_arg {
     block_request req{};
 };
 
-struct block_device {
+class block_device {
+public:
     explicit block_device() = default;
     virtual ~block_device() {}
 
@@ -108,15 +109,18 @@ struct block_device {
 std::unique_ptr<virtio_device> virtio_block_init(virtio_bus_def bus, uint64_t mmio_addr, std::shared_ptr<block_device> bs);
 void virtio_block_req_end(std::unique_ptr<blk_io_callback_arg> arg, int ret);
 
-struct ethernet_device {
+class ethernet_device {
+public:
     explicit ethernet_device() = default;
     virtual ~ethernet_device() {}
-    uint8_t mac_addr[6] = {0}; /* mac address of the interface */
-    virtio_device *owner = nullptr;
-
     virtual void write_packet_to_ether(const uint8_t *buf, int len) = 0;
     bool can_write_packet_to_virtio();
     void write_packet_to_virtio(const uint8_t *buf, int len);
+protected:
+    uint8_t m_mac_addr[6] = {0}; /* mac address of the interface */
+    virtio_device *m_owner = nullptr;
+    
+    friend std::unique_ptr<virtio_device> virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, std::shared_ptr<ethernet_device> es);
 };
 
 std::unique_ptr<virtio_device> virtio_net_init(virtio_bus_def bus, uint64_t mmio_addr, std::shared_ptr<ethernet_device> es);

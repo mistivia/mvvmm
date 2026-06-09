@@ -154,12 +154,12 @@ int tap_net_impl::init(mvvm *vm, const char *tap_ifname)
 
     // Set locally administered MAC address (52:54:00:12:34:56)
     // In production, this should be configurable or derived from TAP
-    mac_addr[0] = 0x52;
-    mac_addr[1] = 0x54;
-    mac_addr[2] = 0x00;
-    mac_addr[3] = 0x12;
-    mac_addr[4] = 0x34;
-    mac_addr[5] = 0x56;
+    m_mac_addr[0] = 0x52;
+    m_mac_addr[1] = 0x54;
+    m_mac_addr[2] = 0x00;
+    m_mac_addr[3] = 0x12;
+    m_mac_addr[4] = 0x34;
+    m_mac_addr[5] = 0x56;
 
     bus.vmfd = vm->m_vm_fd;
     bus.irqline = VIRTIO_NET_IRQ;
