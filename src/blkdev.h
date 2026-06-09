@@ -17,26 +17,28 @@
 #pragma once
 
 #include "virtio.h"
+#include <memory>
 
 namespace mvvmm {
 
 class mvvm;
 
-struct block_device_impl : public block_device {
+class block_device_impl : public block_device, 
+                          public std::enable_shared_from_this<block_device_impl> {
+public:
     explicit block_device_impl() = default;
     virtual ~block_device_impl() override;
-    int fd = -1;
-    uint64_t size = 0;
-    std::unique_ptr<thread_pool> pool;
 
+    int init(mvvm *vm, const char *disk_path);
     virtual int64_t get_sector_count() override;
     virtual void read_async(uint64_t sector_num, int n, // n is sector number
                             block_device_comp_func cb, std::unique_ptr<blk_io_callback_arg> cbarg) override;
     virtual void write_async(uint64_t sector_num, int n, // n is sector nubmer
                              block_device_comp_func cb, std::unique_ptr<blk_io_callback_arg> cbarg) override;
+private:
+    int m_fd = -1;
+    uint64_t m_size = 0;
+    std::unique_ptr<thread_pool> m_pool;
 };
-
-int
-mvvm_init_virtio_blk(mvvm *self, const char *disk_path);
 
 } // namespace mvvmm

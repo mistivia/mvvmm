@@ -213,7 +213,8 @@ int mvvm::init(uint64_t mem_size, const char *disk, const char *network)
     m_serial = std::make_unique<serial>(this);
     // init virtio block device
     if (disk != NULL) {
-        if (mvvm_init_virtio_blk(this, disk) < 0) {
+        auto block_device = std::make_shared<block_device_impl>();
+        if (block_device->init(this, disk) < 0) {
             fprintf(stderr, "mvvm init error, failed to load disk.\n");
             return -1;
         }

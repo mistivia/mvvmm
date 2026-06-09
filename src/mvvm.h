@@ -18,6 +18,7 @@
 
 #include <stdlib.h>
 
+#include "blkdev.h"
 #include "virtio.h"
 #include "serial.h"
 
@@ -62,8 +63,7 @@ private:
     uint8_t m_power_cmd = 0;
 
     friend void keyboard_thread_func(mvvm *vm);
-    friend int mvvm_init_virtio_blk(mvvm *self, const char *disk_path);
-    friend void *keyboard_thread_func(void *arg);
+    friend class block_device_impl;
     friend int mvvm_init_virtio_net(mvvm *self, const char *tap_ifname);
 };
 

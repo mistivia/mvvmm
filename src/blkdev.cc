@@ -25,6 +25,7 @@
 #include "blkdev.h"
 #include "mvvm.h"
 #include "config.h"
+#include "virtio.h"
 
 namespace mvvmm {
 
@@ -33,8 +34,8 @@ namespace mvvmm {
 class thread_pool;
 
 block_device_impl::~block_device_impl() {
-    if (this->fd >= 0) {
-        close(this->fd);
+    if (m_fd >= 0) {
+        close(m_fd);
     }
 }
 
@@ -80,7 +81,7 @@ static void block_io_worker_fn(std::shared_ptr<async_io_req> req)
 // Get total sector count (synchronous operation)
 int64_t block_device_impl::get_sector_count()
 {
-    return size / SECTOR_SIZE;
+    return m_size / SECTOR_SIZE;
 }
 
 // Asynchronous read operation using thread pool
@@ -89,13 +90,13 @@ void block_device_impl::read_async(uint64_t sector_num, int n,
 {
     auto req = std::make_shared<async_io_req>();
 
-    req->fd = fd;
+    req->fd = m_fd;
     req->offset = sector_num * SECTOR_SIZE;
     req->count = n * SECTOR_SIZE;
     req->cb = cb;
     req->arg = std::move(arg);
     req->is_write = 0;
-    if (pool->run([req]() {block_io_worker_fn(req);}) < 0) {
+    if (m_pool->run([req]() {block_io_worker_fn(req);}) < 0) {
         virtio_block_req_end(std::move(req->arg), -1);
         return;
     }
@@ -110,14 +111,14 @@ void block_device_impl::write_async(uint64_t sector_num, int n,
 {
     auto req = std::make_shared<async_io_req>();
 
-    req->fd = fd;
+    req->fd = m_fd;
     req->offset = sector_num * SECTOR_SIZE;
     // Cast away const for pread/pwrite API compatibility
     req->count = n * SECTOR_SIZE;
     req->cb = cb;
     req->arg = std::move(arg);
     req->is_write = 1;
-    if (pool->run([req]() { block_io_worker_fn(req); }) < 0) {
+    if (m_pool->run([req]() { block_io_worker_fn(req); }) < 0) {
         virtio_block_req_end(std::move(req->arg), -1);
         return;
     }
@@ -126,41 +127,35 @@ void block_device_impl::write_async(uint64_t sector_num, int n,
 }
 
 // Initialize virtio block device with thread pool backend
-int mvvm_init_virtio_blk(mvvm *self, const char *disk_path)
+int block_device_impl::init(mvvm *vm, const char *disk_path)
 {
     struct stat st = {0};
     virtio_bus_def bus{};
-    // Allocate block device context
-    auto block_device = std::make_shared<block_device_impl>();
-    if (!block_device) {
-        fprintf(stderr, "failed to allocate block device context\n");
-        return -1;
-    }
     // Open disk image file
-    block_device->fd = open(disk_path, O_RDWR);
-    if (block_device->fd < 0) {
-        perror("mvvm_init_virtio_blk, open disk image");
+    m_fd = open(disk_path, O_RDWR);
+    if (m_fd < 0) {
+        perror("block_device_impl::init, open disk image");
         return -1;
     }
     // Get file size
-    if (fstat(block_device->fd, &st) < 0) {
-        perror("mvvm_init_virtio_blk, fstat disk image");
+    if (fstat(m_fd, &st) < 0) {
+        perror("block_device_impl::init, fstat disk image");
         return -1;
     }
-    block_device->size = st.st_size;
+    m_size = st.st_size;
     // Create thread pool for async I/O operations
-    block_device->pool = thread_pool::make_instance(VIRTIO_BLK_MAX_QUEUE_NUM);
-    if (!block_device->pool) {
+    m_pool = thread_pool::make_instance(VIRTIO_BLK_MAX_QUEUE_NUM);
+    if (!m_pool) {
         fprintf(stderr, "failed to create thread pool\n");
         return -1;
     }
 
-    bus.vmfd = self->m_vm_fd;
+    bus.vmfd = vm->m_vm_fd;
     bus.irqline = VIRTIO_BLK_IRQ;
-    bus.mem_map = self->m_mem_map.get();
+    bus.mem_map = vm->m_mem_map.get();
     // Initialize virtio block device
-    self->m_blk = virtio_block_init(bus, VIRTIO_BLK_MMIO_ADDR, block_device);
-    if (!self->m_blk) {
+    vm->m_blk = virtio_block_init(bus, VIRTIO_BLK_MMIO_ADDR, shared_from_this());
+    if (!vm->m_blk) {
         fprintf(stderr, "failed to initialize virtio block device\n");
         return -1;
     }
