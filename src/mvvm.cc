@@ -220,7 +220,8 @@ int mvvm::init(uint64_t mem_size, const char *disk, const char *network)
         }
     }
     if (network != NULL) {
-        if (mvvm_init_virtio_net(this, "vm0") < 0) {
+        auto tap_device = std::make_shared<tap_net_impl>();
+        if (tap_device->init(this, "vm0") < 0) {
             fprintf(stderr, "mvvm init error, failed to open tap interface.\n");
             return -1;
         }

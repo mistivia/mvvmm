@@ -39,25 +39,25 @@
 namespace mvvmm {
 
 tap_net_impl::~tap_net_impl() {
-    if (this->fd >= 0) {
-        close(this->fd);
+    if (m_fd >= 0) {
+        close(m_fd);
     }
     {
-        std::unique_lock<std::mutex> lk{this->lock};
-        this->quit = 1;
+        std::unique_lock<std::mutex> lk{m_lock};
+        m_quit = 1;
     }
-    if (this->rx_thread.joinable()) {
-        this->rx_thread.join();
+    if (m_rx_thread.joinable()) {
+        m_rx_thread.join();
     }
 }
 
 
 void tap_net_impl::write_packet_to_ether(const uint8_t *buf, int len)
 {
-    if (fd < 0 || !buf || len <= 0) {
+    if (m_fd < 0 || !buf || len <= 0) {
         return;
     }
-    write(fd, buf, len);
+    write(m_fd, buf, len);
 }
 
 static ssize_t timed_read(int fd, void *buf, size_t len, int timeout_ms)
@@ -87,20 +87,20 @@ static ssize_t timed_read(int fd, void *buf, size_t len, int timeout_ms)
     return -1;
 }
 
-static void tap_net_rx_thread(std::shared_ptr<tap_net_impl> net)
+void tap_net_impl::rx_thread_run(std::shared_ptr<tap_net_impl> net)
 {
     uint8_t buf[TAP_BUF_SIZE] = {0};
 
-    if (!net || net->fd < 0) {
+    if (!net || net->m_fd < 0) {
         return;
     }
 
     while (1) {
-        ssize_t len = timed_read(net->fd, buf, sizeof(buf), 300);
+        ssize_t len = timed_read(net->m_fd, buf, sizeof(buf), 300);
         if (len < 0) {
             if (errno == EINTR || errno == ETIMEDOUT) {
-                std::unique_lock<std::mutex> lk{net->lock};
-                if (net->quit) {
+                std::unique_lock<std::mutex> lk{net->m_lock};
+                if (net->m_quit) {
                     return;
                 }
                 continue;
@@ -123,17 +123,15 @@ static void tap_net_rx_thread(std::shared_ptr<tap_net_impl> net)
 }
 
 // Initialize virtio network device with TAP backend
-int mvvm_init_virtio_net(mvvm *self, const char *tap_ifname)
+int tap_net_impl::init(mvvm *vm, const char *tap_ifname)
 {
     virtio_bus_def bus;
     ifreq ifr = {0};
 
-    // Allocate TAP device context
-    auto tap = std::make_shared<tap_net_impl>();
-    tap->quit = 0;
+    m_quit = 0;
     // Open TUN/TAP clone device
-    tap->fd = open("/dev/net/tun", O_RDWR | O_NONBLOCK);
-    if (tap->fd < 0) {
+    m_fd = open("/dev/net/tun", O_RDWR | O_NONBLOCK);
+    if (m_fd < 0) {
         perror("mvvm_init_virtio_net: open /dev/net/tun failed");
         return -1;
     }
@@ -145,40 +143,40 @@ int mvvm_init_virtio_net(mvvm *self, const char *tap_ifname)
         ifr.ifr_name[IFNAMSIZ - 1] = '\0';
     }
 
-    if (ioctl(tap->fd, TUNSETIFF, &ifr) < 0) {
+    if (ioctl(m_fd, TUNSETIFF, &ifr) < 0) {
         perror("mvvm_init_virtio_net: ioctl TUNSETIFF failed");
         return -1;
     }
 
     // Store the actual interface name assigned by kernel
-    strncpy(tap->ifname, ifr.ifr_name, IFNAMSIZ - 1);
-    tap->ifname[IFNAMSIZ - 1] = '\0';
+    strncpy(m_ifname, ifr.ifr_name, IFNAMSIZ - 1);
+    m_ifname[IFNAMSIZ - 1] = '\0';
 
     // Set locally administered MAC address (52:54:00:12:34:56)
     // In production, this should be configurable or derived from TAP
-    tap->mac_addr[0] = 0x52;
-    tap->mac_addr[1] = 0x54;
-    tap->mac_addr[2] = 0x00;
-    tap->mac_addr[3] = 0x12;
-    tap->mac_addr[4] = 0x34;
-    tap->mac_addr[5] = 0x56;
+    mac_addr[0] = 0x52;
+    mac_addr[1] = 0x54;
+    mac_addr[2] = 0x00;
+    mac_addr[3] = 0x12;
+    mac_addr[4] = 0x34;
+    mac_addr[5] = 0x56;
 
-    bus.vmfd = self->m_vm_fd;
+    bus.vmfd = vm->m_vm_fd;
     bus.irqline = VIRTIO_NET_IRQ;
 
     // Setup virtio bus definition
-    bus.mem_map = self->m_mem_map.get();
+    bus.mem_map = vm->m_mem_map.get();
 
     // Initialize virtio network device
-    self->m_net = virtio_net_init(bus, VIRTIO_NET_MMIO_ADDR, tap);
-    if (!self->m_net) {
+    vm->m_net = virtio_net_init(bus, VIRTIO_NET_MMIO_ADDR, shared_from_this());
+    if (!vm->m_net) {
         fprintf(stderr, "failed to initialize virtio net device\n");
         return -1;
     }
     // Start RX thread to handle incoming packets from TAP
     try {
-        tap->rx_thread = std::thread{[tap](){
-            tap_net_rx_thread(tap);
+        m_rx_thread = std::thread{[self=shared_from_this()](){
+            rx_thread_run(self);
         }};
     } catch (...) {
         fprintf(stderr, "failed to create TAP RX thread\n");

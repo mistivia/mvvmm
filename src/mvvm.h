@@ -19,6 +19,7 @@
 #include <stdlib.h>
 
 #include "blkdev.h"
+#include "netdev.h"
 #include "virtio.h"
 #include "serial.h"
 
@@ -64,7 +65,7 @@ private:
 
     friend void keyboard_thread_func(mvvm *vm);
     friend class block_device_impl;
-    friend int mvvm_init_virtio_net(mvvm *self, const char *tap_ifname);
+    friend class tap_net_impl;
 };
 
 } // namespace mvvmm
