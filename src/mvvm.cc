@@ -40,6 +40,16 @@
 
 namespace mvvmm {
 
+
+uint8_t *guest_mem_map::addr_to_host(uint64_t guest_addr)
+{
+    if (guest_addr > size) {
+        return NULL;
+    }
+    return (uint8_t *)host_mem + guest_addr;
+}
+
+    
 void mvvm::set_flat_mode(struct kvm_segment *seg)
 {
     seg->base = 0;

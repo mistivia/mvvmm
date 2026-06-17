@@ -160,6 +160,10 @@ using virtio_devoce_recv_fn =
 struct virtio_device {
     explicit virtio_device() = default;
     virtual ~virtio_device();
+    void reset();
+    uint16_t read16(virtio_phys_addr_t addr);
+    void write16(virtio_phys_addr_t addr, uint16_t data);
+    void write32(virtio_phys_addr_t addr, uint32_t data);
     struct guest_mem_map *mem_map = nullptr;
     /* MMIO only */
     irq_signal irq{};

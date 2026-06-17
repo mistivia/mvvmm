@@ -32,6 +32,7 @@ namespace mvvmm {
 
 struct guest_mem_map {
     explicit guest_mem_map() = default;
+    uint8_t* addr_to_host(uint64_t addr);
     void *host_mem;
     uint64_t size;
 };
