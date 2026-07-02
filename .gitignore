@@ -15,3 +15,15 @@ Module.symvers
 modules.order
 initramfs/
 ramdisk/
+.Xauthority
+.bashrc
+.inputrc
+README
+REVIEW.md
+build.log
+compile_commands.json
+guest-module/.Xauthority
+guest-module/.bashrc
+guest-module/.inputrc
+task.md
+

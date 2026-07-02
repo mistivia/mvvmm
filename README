@@ -1,0 +1,186 @@
+==============================================
+MVVMM – Minimal Viable Virtual Machine Monitor
+==============================================
+
+A virtual machine monitor (VMM) built upon KVM, designed for experimentation and
+learning.
+
+Features
+========
+
+* Boot Linux with minimal overhead
+* Virtio‑based block and network devices
+* Graceful shutdown via guest module
+* Performance optimizations: `irqfd`, `ioeventfd`, virtqueue interrupt
+  suppression
+* Run AI agents (Codex, Claude Code, OpenClaw, etc.)
+
+Quick Start
+===========
+
+Prerequisites
+-------------
+
+* A Linux host with KVM support (`/dev/kvm` accessible)
+* GCC, Make, and standard build tools
+* Root privileges for network setup and disk mounting
+* Enough RAM and disk space for the guest
+
+Build
+-----
+
+Download `mvvmm` and compile it:
+
+    cd mvvmm
+    make
+
+The binary `mvvmm` will be produced in the current directory.
+
+Creating a Guest
+----------------
+
+Linux Kernel
+............
+
+Download and build a recent Linux kernel (6.18.9 used in this example):
+
+    wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.9.tar.xz
+    tar -xf linux-6.18.9.tar.xz
+    cd linux-6.18.9
+
+Enable the necessary VirtIO‑MMIO options:
+
+    make defconfig
+    make menuconfig
+
+Search for and enable:
+
+* CONFIG_VIRTIO_MMIO
+* CONFIG_VIRTIO_MMIO_CMDLINE_DEVICES
+
+Then compile the kernel:
+
+    make -j$(nproc)
+    cp arch/x86/boot/bzImage ../vmlinuz
+    cd ..
+
+Initial RAM Disk (initrd)
+.........................
+
+Create a minimal initramfs with BusyBox:
+
+    wget https://busybox.net/downloads/binaries/1.35.0-x86_64-linux-musl/busybox
+    mkdir -p initramfs/bin
+    chmod +x busybox
+    ./busybox --install initramfs/bin/
+
+Write an "init" script at "initramfs/init":
+
+    #!/bin/sh
+
+    mount -t devtmpfs devtmpfs /dev
+    mount -t proc proc /proc
+    mount -t sysfs sys /sys
+    mkdir -p /dev/pts
+    mount -t devpts devpts /dev/pts
+    mdev -s
+
+    mkdir /sysroot
+    mount /dev/vda /sysroot
+    mount --move /dev /sysroot/dev
+    mount --move /proc /sysroot/proc
+    mount --move /sys /sysroot/sys
+
+    ip link set eth0 up
+    ip addr add 192.168.200.2/24 dev eth0
+    ip route add default via 192.168.200.1
+
+    exec chroot /sysroot /sbin/init
+
+Make it executable and pack the initrd:
+
+    cd initramfs
+    chmod +x init
+    find . -print0 | cpio --null -ov --format=newc | gzip > ../initrd
+    cd ..
+
+Disk Image
+..........
+
+Create a sparse disk image and install Alpine Linux:
+
+    dd if=/dev/zero of=disk.img bs=1 count=0 seek=15G
+    mkfs.ext4 disk.img
+    mkdir mnt
+    sudo mount disk.img ./mnt
+
+Extract Alpine minirootfs:
+
+    cd mnt
+    wget https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/x86_64/alpine-minirootfs-3.23.3-x86_64.tar.gz
+    tar -xf alpine-minirootfs-3.23.3-x86_64.tar.gz
+    cd ..
+
+Chroot into the image for basic setup:
+
+    sudo chroot ./mnt
+    export PATH=/bin:/sbin:$PATH
+    passwd
+    echo 'nameserver 8.8.8.8' > ./etc/resolv.conf
+    apk add openrc fastfetch
+
+Enable serial console by uncommenting the following line in `/etc/inittab`:
+
+    ttyS0::respawn:/sbin/getty -L 115200 ttyS0 vt100
+
+Exit chroot and unmount:
+
+    exit
+    sudo umount ./mnt
+
+Network Setup
+.............
+
+Create a TAP device and enable NAT:
+
+    ip tuntap add dev tap0 mod tap
+    ip link set dev tap0 up
+    ip addr add 192.168.200.1/24 dev tap0
+
+    sysctl -w net.ipv4.ip_forward=1
+    iptables -A FORWARD -i tap0 -j ACCEPT
+    iptables -A FORWARD -o tap0 -j ACCEPT
+    iptables -t nat -A POSTROUTING -o [YOUR_INTERNET_INTERFACE] -j MASQUERADE
+
+Replace "[YOUR_INTERNET_INTERFACE]" with your host's outward‑facing interface
+(e.g., "eth0", "wlan0").
+
+Running the VM
+--------------
+
+Launch the virtual machine with the kernel, initrd, disk image, and TAP device:
+
+    ./mvvmm -k vmlinuz -i initrd -d disk.img -t tap0
+
+You will see the serial console. Log in with the root password you set during
+the chroot step.
+
+Once logged in, you can run `fastfetch` to verify the system is operational.
+
+To shut down the guest, issue:
+
+    poweroff
+
+Then press `Ctrl+A Ctrl+C` in the terminal to exit the VMM.
+
+Power Management
+================
+
+MVVMM does not have ACPI. A small Linux kernel module (in "guest-module/")
+handles poweroff and graceful shutdown.
+
+When the host receives SIGTERM, the guest module will shut down the guest
+gracefully.
+
+Reboot is not supported; restart the virtual machine process if you need to
+reboot.
