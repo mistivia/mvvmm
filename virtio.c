@@ -94,18 +94,14 @@ struct virtio_desc {
 
 /* return < 0 to stop the notification (it must be manually restarted
    later), 0 if OK */
-typedef int virtio_device_recv_fn(struct virtio_device *s1, int queue_idx,
+typedef int (*virtio_device_recv_fn)(struct virtio_device *s1, int queue_idx,
                                  int desc_idx, int read_size,
                                  int write_size);
-
-/* return NULL if no RAM at this address. The mapping is valid for one page */
-typedef uint8_t *virtio_get_ram_ptr_fn(struct virtio_device *s, virtio_phys_addr_t paddr);
 
 struct virtio_device {
     struct guest_mem_map *mem_map;
     /* MMIO only */
     struct irq_signal irq;
-    virtio_get_ram_ptr_fn *get_ram_ptr;
     int debug;
 
     uint32_t int_status;
@@ -118,7 +114,7 @@ struct virtio_device {
     uint32_t device_id;
     uint32_t vendor_id;
     uint32_t device_features;
-    virtio_device_recv_fn *device_recv;
+    virtio_device_recv_fn device_recv;
     void (*config_write)(struct virtio_device *s); /* called after the config
                                               is written */
     uint32_t config_space_size; /* in bytes, must be multiple of 4 */
@@ -208,14 +204,13 @@ static uint8_t* guest_addr_to_host_addr(struct virtio_device *s, uint64_t guest_
 
 static int virtio_init(struct virtio_device *s, struct virtio_bus_def bus, uint64_t mmio_addr,
                         uint32_t device_id, int config_space_size,
-                        virtio_device_recv_fn *device_recv, int max_queue_num)
+                        virtio_device_recv_fn device_recv, int max_queue_num)
 {
     memset(s, 0, sizeof(*s));
 
     s->mem_map = bus.mem_map;
     s->irq = bus.irq;
     s->irq.irqfd = -1;
-    s->get_ram_ptr = guest_addr_to_host_addr;
     s->mmio_addr = mmio_addr;
     for (int i = 0; i < MAX_QUEUE; i++) {
         s->ioeventfd[i] = -1;
@@ -249,7 +244,7 @@ static uint16_t virtio_read16(struct virtio_device *s, virtio_phys_addr_t addr)
     uint8_t *ptr = NULL;
     if (addr & 1)
         return 0; /* unaligned access are not supported */
-    ptr = s->get_ram_ptr(s, addr);
+    ptr = guest_addr_to_host_addr(s, addr);
     if (!ptr)
         return 0;
     return *(uint16_t *)ptr;
@@ -261,7 +256,7 @@ static void virtio_write16(struct virtio_device *s, virtio_phys_addr_t addr,
     uint8_t *ptr = NULL;
     if (addr & 1)
         return; /* unaligned access are not supported */
-    ptr = s->get_ram_ptr(s, addr);
+    ptr = guest_addr_to_host_addr(s, addr);
     if (!ptr)
         return;
     *(uint16_t *)ptr = val;
@@ -274,7 +269,7 @@ static void virtio_write32(struct virtio_device *s, virtio_phys_addr_t addr,
     uint8_t *ptr = NULL;
     if (addr & 3)
         return; /* unaligned access are not supported */
-    ptr = s->get_ram_ptr(s, addr);
+    ptr = guest_addr_to_host_addr(s, addr);
     if (!ptr)
         return;
     *(uint32_t *)ptr = val;
@@ -293,7 +288,7 @@ static int virtio_memcpy_from_guest(struct virtio_device *s, uint8_t *buf,
 
     while (count > 0) {
         l = min_int(count, VIRTIO_PAGE_SIZE - (addr & (VIRTIO_PAGE_SIZE - 1)));
-        ptr = s->get_ram_ptr(s, addr);
+        ptr = guest_addr_to_host_addr(s, addr);
         if (!ptr)
             return -1;
         atomic_thread_fence(memory_order_acquire);
@@ -313,7 +308,7 @@ static int virtio_memcpy_to_guest(struct virtio_device *s, virtio_phys_addr_t ad
 
     while (count > 0) {
         l = min_int(count, VIRTIO_PAGE_SIZE - (addr & (VIRTIO_PAGE_SIZE - 1)));
-        ptr = s->get_ram_ptr(s, addr);
+        ptr = guest_addr_to_host_addr(s, addr);
         if (!ptr)
             return -1;
         memcpy(ptr, buf, l);
