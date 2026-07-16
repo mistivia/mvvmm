@@ -27,7 +27,7 @@ struct tap_net_ctx {
 };
 
 static void
-write_packet_to_ether(EthernetDevice *net, const uint8_t *buf, int len)
+write_packet_to_ether(struct ether_device *net, const uint8_t *buf, int len)
 {
     struct tap_net_ctx *ctx = net->opaque;
     if (!ctx || ctx->fd < 0 || !buf || len <= 0) {
@@ -67,7 +67,7 @@ timed_read(int fd, void *buf, size_t len, int timeout_ms)
 static void *
 tap_net_rx_thread(void *arg)
 {
-    EthernetDevice *net = arg;
+    struct ether_device *net = arg;
     struct tap_net_ctx *ctx = net->opaque;
     uint8_t buf[TAP_BUF_SIZE] = {0};
 
@@ -113,9 +113,9 @@ int
 mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
 {
     struct tap_net_ctx *ctx = NULL;
-    EthernetDevice *net = NULL;
-    struct IRQSignal irq = {0};
-    VIRTIOBusDef bus = {0};
+    struct ether_device *net = NULL;
+    struct irq_signal irq = {0};
+    struct virtio_bus_def bus = {0};
     struct ifreq ifr = {0};
     int ret = -1;
 
@@ -150,10 +150,10 @@ mvvm_init_virtio_net(struct mvvm *self, const char *tap_ifname)
     strncpy(ctx->ifname, ifr.ifr_name, IFNAMSIZ - 1);
     ctx->ifname[IFNAMSIZ - 1] = '\0';
 
-    // Allocate and initialize EthernetDevice structure
+    // Allocate and initialize struct ether_device structure
     net = malloc(sizeof(*net));
     if (!net) {
-        fprintf(stderr, "failed to allocate EthernetDevice structure\n");
+        fprintf(stderr, "failed to allocate struct ether_device structure\n");
         goto fail;
     }
 

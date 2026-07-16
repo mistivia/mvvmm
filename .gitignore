@@ -18,7 +18,6 @@ ramdisk/
 .Xauthority
 .bashrc
 .inputrc
-README
 REVIEW.md
 build.log
 compile_commands.json

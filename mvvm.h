@@ -20,8 +20,8 @@ struct mvvm {
     int cpu_fd;
     struct guest_mem_map *mem_map;
     struct serial serial;
-    VIRTIODevice *blk;
-    VIRTIODevice *net;
+    struct virtio_device *blk;
+    struct virtio_device *net;
     int quit;
     uint8_t power_cmd;
 };

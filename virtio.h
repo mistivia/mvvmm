@@ -30,90 +30,86 @@
 
 typedef uint64_t virtio_phys_addr_t;
 
-struct IRQSignal {
+struct irq_signal {
     int vmfd;
     int irqline;
     int irqfd;  /* eventfd for irqfd mechanism */
 };
-typedef struct IRQSignal IRQSignal;
 
-typedef struct {
+struct virtio_bus_def {
     struct guest_mem_map *mem_map;
-    IRQSignal irq;
-} VIRTIOBusDef;
+    struct irq_signal irq;
+};
 
 /* irqfd functions */
-int virtio_irqfd_init(IRQSignal *irq);
-void virtio_irqfd_cleanup(IRQSignal *irq);
+int virtio_irqfd_init(struct irq_signal *irq);
+void virtio_irqfd_cleanup(struct irq_signal *irq);
 
-typedef struct VIRTIODevice VIRTIODevice; 
+struct virtio_device;
 
-uint32_t virtio_mmio_read(VIRTIODevice *s, uint32_t offset1, int size);
-void virtio_mmio_write(VIRTIODevice *s, uint32_t offset,
+uint32_t virtio_mmio_read(struct virtio_device *s, uint32_t offset1, int size);
+void virtio_mmio_write(struct virtio_device *s, uint32_t offset,
                        uint32_t val, int size);
 
-void virtio_set_debug(VIRTIODevice *s, int debug_flags);
+void virtio_set_debug(struct virtio_device *s, int debug_flags);
 
 /* block device */
 struct blk_io_callback_arg;
-typedef void BlockDeviceCompletionFunc(struct blk_io_callback_arg *callback_arg, int ret);
+
+typedef void block_device_completion_fn(struct blk_io_callback_arg *callback_arg, int ret);
 
 struct disk_image {
     int fd;
     uint64_t size;
 };
 
-typedef struct BlockDevice BlockDevice;
-
-typedef struct {
+struct block_request {
     uint32_t type;
     uint8_t *buf;
     int write_size;
     int queue_idx;
     int desc_idx;
-} BlockRequest;
-
-struct blk_io_callback_arg {
-    VIRTIODevice *s;
-    BlockRequest req;
 };
 
-struct BlockDevice {
-    int64_t (*get_sector_count)(BlockDevice *bs);
-    int (*read_async)(BlockDevice *bs,
+struct blk_io_callback_arg {
+    struct virtio_device *s;
+    struct block_request req;
+};
+
+struct block_device {
+    int64_t (*get_sector_count)(struct block_device *bs);
+    int (*read_async)(struct block_device *bs,
                       uint64_t sector_num, uint8_t *buf, int n, // n is sector number
-                      BlockDeviceCompletionFunc *cb, struct blk_io_callback_arg *cbarg);
-    int (*write_async)(BlockDevice *bs,
+                      block_device_completion_fn *cb, struct blk_io_callback_arg *cbarg);
+    int (*write_async)(struct block_device *bs,
                        uint64_t sector_num, const uint8_t *buf, int n, // n is sector nubmer
-                       BlockDeviceCompletionFunc *cb, struct blk_io_callback_arg *cbarg);
+                       block_device_completion_fn *cb, struct blk_io_callback_arg *cbarg);
     void *opaque;
 };
 
-VIRTIODevice *virtio_block_init(VIRTIOBusDef bus, uint64_t mmio_addr, BlockDevice *bs);
+struct virtio_device *virtio_block_init(struct virtio_bus_def bus, uint64_t mmio_addr, struct block_device *bs);
 
-void virtio_block_destroy(VIRTIODevice *s);
-void* virtio_block_get_opaque(VIRTIODevice *s);
+void virtio_block_destroy(struct virtio_device *s);
+void* virtio_block_get_opaque(struct virtio_device *s);
 
 /* network device */
-struct EthernetDevice;
-typedef struct EthernetDevice EthernetDevice; 
 
-struct EthernetDevice {
+struct ether_device {
     uint8_t mac_addr[6]; /* mac address of the interface */
-    void (*write_packet_to_ether)(EthernetDevice *net,
+    void (*write_packet_to_ether)(struct ether_device *net,
                                   const uint8_t *buf, int len);
     void *opaque;
     /* the following is set by the device */
     void *device_opaque;
-    bool (*can_write_packet_to_virtio)(EthernetDevice *net);
-    void (*write_packet_to_virtio)(EthernetDevice *net,
+    bool (*can_write_packet_to_virtio)(struct ether_device *net);
+    void (*write_packet_to_virtio)(struct ether_device *net,
                                 const uint8_t *buf, int len);
 
 };
 
-VIRTIODevice *virtio_net_init(VIRTIOBusDef bus, uint64_t mmio_addr, EthernetDevice *es);
+struct virtio_device *virtio_net_init(struct virtio_bus_def bus, uint64_t mmio_addr, struct ether_device *es);
 
-void virtio_net_destroy(VIRTIODevice *s);
-void* virtio_net_get_opaque(VIRTIODevice *s);
+void virtio_net_destroy(struct virtio_device *s);
+void* virtio_net_get_opaque(struct virtio_device *s);
 
 #endif /* VIRTIO_H */
