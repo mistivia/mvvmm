@@ -79,10 +79,10 @@ struct blk_io_callback_arg {
 struct block_device {
     int64_t (*get_sector_count)(struct block_device *bs);
     int (*read_async)(struct block_device *bs,
-                      uint64_t sector_num, uint8_t *buf, int n, // n is sector number
+                      uint64_t sector_num, uint8_t *buf, int sector_count,
                       block_device_completion_fn *cb, struct blk_io_callback_arg *cbarg);
     int (*write_async)(struct block_device *bs,
-                       uint64_t sector_num, const uint8_t *buf, int n, // n is sector nubmer
+                       uint64_t sector_num, const uint8_t *buf, int sector_count,
                        block_device_completion_fn *cb, struct blk_io_callback_arg *cbarg);
     void *opaque;
 };

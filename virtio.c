@@ -254,11 +254,13 @@ static void virtio_write16(struct virtio_device *s, virtio_phys_addr_t addr,
                            uint16_t val)
 {
     uint8_t *ptr = NULL;
-    if (addr & 1)
+    if (addr & 1) {
         return; /* unaligned access are not supported */
+    }
     ptr = guest_addr_to_host_addr(s, addr);
-    if (!ptr)
+    if (!ptr) {
         return;
+    }
     *(uint16_t *)ptr = val;
     atomic_thread_fence(memory_order_release);
 }
@@ -267,11 +269,13 @@ static void virtio_write32(struct virtio_device *s, virtio_phys_addr_t addr,
                            uint32_t val)
 {
     uint8_t *ptr = NULL;
-    if (addr & 3)
+    if (addr & 3) {
         return; /* unaligned access are not supported */
+    }
     ptr = guest_addr_to_host_addr(s, addr);
-    if (!ptr)
+    if (!ptr) {
         return;
+    }
     *(uint32_t *)ptr = val;
     atomic_thread_fence(memory_order_release);
 }
@@ -289,8 +293,7 @@ static int virtio_memcpy_from_guest(struct virtio_device *s, uint8_t *buf,
     while (count > 0) {
         l = min_int(count, VIRTIO_PAGE_SIZE - (addr & (VIRTIO_PAGE_SIZE - 1)));
         ptr = guest_addr_to_host_addr(s, addr);
-        if (!ptr)
-            return -1;
+        if (!ptr) return -1;
         atomic_thread_fence(memory_order_acquire);
         memcpy(buf, ptr, l);
         addr += l;
@@ -309,8 +312,7 @@ static int virtio_memcpy_to_guest(struct virtio_device *s, virtio_phys_addr_t ad
     while (count > 0) {
         l = min_int(count, VIRTIO_PAGE_SIZE - (addr & (VIRTIO_PAGE_SIZE - 1)));
         ptr = guest_addr_to_host_addr(s, addr);
-        if (!ptr)
-            return -1;
+        if (!ptr) return -1;
         memcpy(ptr, buf, l);
         atomic_thread_fence(memory_order_release);
         addr += l;
@@ -336,8 +338,7 @@ static int memcpy_to_from_queue(struct virtio_device *s, uint8_t *buf,
     struct virtio_desc desc = {0};
     int l, f_write_flag = {0};
 
-    if (count == 0)
-        return 0;
+    if (count == 0) return 0;
 
     if (get_desc(s, &desc, queue_idx, desc_idx) < 0) {
         fprintf(stderr, "memcpy_to_from_queue get_desc failed.\n");
@@ -352,10 +353,8 @@ static int memcpy_to_from_queue(struct virtio_device *s, uint8_t *buf,
                 fprintf(stderr, "memcpy_to_from_queue infinite loop1.\n");
                 return -1;
             }
-            if ((desc.flags & VRING_DESC_F_WRITE) == f_write_flag)
-                break;
-            if (!(desc.flags & VRING_DESC_F_NEXT))
-                return -1;
+            if ((desc.flags & VRING_DESC_F_WRITE) == f_write_flag) break;
+            if (!(desc.flags & VRING_DESC_F_NEXT)) return -1;
             desc_idx = desc.next;
             if (get_desc(s, &desc, queue_idx, desc_idx) < 0) {
                 fprintf(stderr, "memcpy_to_from_queue: failed to get_desc2.\n");
@@ -372,12 +371,11 @@ static int memcpy_to_from_queue(struct virtio_device *s, uint8_t *buf,
             fprintf(stderr, "memcpy_to_from_queue infinite loop2.\n");
             return -1;
         }
-        if ((desc.flags & VRING_DESC_F_WRITE) != f_write_flag)
-            return -1;
-        if (offset < desc.len)
+        if ((desc.flags & VRING_DESC_F_WRITE) != f_write_flag) return -1;
+        if (offset < desc.len) {
             break;
-        if (!(desc.flags & VRING_DESC_F_NEXT))
-            return -1;
+        }
+        if (!(desc.flags & VRING_DESC_F_NEXT)) return -1;
         desc_idx = desc.next;
         offset -= desc.len;
         if (get_desc(s, &desc, queue_idx, desc_idx) < 0) {
@@ -392,13 +390,15 @@ static int memcpy_to_from_queue(struct virtio_device *s, uint8_t *buf,
             return -1;
         }
         l = min_int(count, desc.len - offset);
-        if (to_queue)
+        if (to_queue) {
             virtio_memcpy_to_guest(s, desc.addr + offset, buf, l);
-        else
+        } else {
             virtio_memcpy_from_guest(s, buf, desc.addr + offset, l);
+        }
         count -= l;
-        if (count == 0)
+        if (count == 0) {
             break;
+        }
         offset += l;
         buf += l;
         if (offset == desc.len) {
@@ -409,8 +409,7 @@ static int memcpy_to_from_queue(struct virtio_device *s, uint8_t *buf,
                 fprintf(stderr, "memcpy_to_from_queue: failed to get_desc4.\n");
                 return -1;
             }
-            if ((desc.flags & VRING_DESC_F_WRITE) != f_write_flag)
-                return -1;
+            if ((desc.flags & VRING_DESC_F_WRITE) != f_write_flag) return -1;
             offset = 0;
         }
     }
@@ -540,8 +539,7 @@ static void *virtio_ioeventfd_poll_thread(void *arg)
     while (s->ioeventfd_enabled) {
         int ret = poll(pfds, nfds, 300); /* timeout 1 second */
         if (ret < 0) {
-            if (errno == EINTR)
-                continue;
+            if (errno == EINTR) continue;
             perror("poll");
             break;
         }
@@ -558,8 +556,7 @@ static void *virtio_ioeventfd_poll_thread(void *arg)
                 /* find queue index */
                 int qidx;
                 for (qidx = 0; qidx < MAX_QUEUE; qidx++) {
-                    if (s->ioeventfd[qidx] == pfds[i].fd)
-                        break;
+                    if (s->ioeventfd[qidx] == pfds[i].fd) break;
                 }
                 if (qidx < MAX_QUEUE) {
                     pthread_mutex_lock(&s->lock);
@@ -654,11 +651,9 @@ static int get_desc_rw_size(struct virtio_device *s,
     }
     
     for(;;) {
-        if (!(desc.flags & VRING_DESC_F_WRITE))
-            return -1;
+        if (!(desc.flags & VRING_DESC_F_WRITE)) return -1;
         write_size += desc.len;
-        if (!(desc.flags & VRING_DESC_F_NEXT))
-            break;
+        if (!(desc.flags & VRING_DESC_F_NEXT)) break;
         desc_idx = desc.next;
         get_desc(s, &desc, queue_idx, desc_idx);
     }
