@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Mistivia <i@mistivia.com>
-
 #include <pthread.h>
 #include <stdarg.h>
 #include <stdatomic.h>

@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (C) 2026 Mistivia <i@mistivia.com>
-
 #ifndef MVVM_H_
 #define MVVM_H_
 
